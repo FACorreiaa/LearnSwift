@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TAILWIND_VERSION: v4.3.3
+
+jobs:
+  test:
+    name: Test & Build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: seshat
+          POSTGRES_PASSWORD: seshat
+          POSTGRES_DB: seshat
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U seshat -d seshat"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://seshat:seshat@localhost:5432/seshat?sslmode=disable
+      TEST_DATABASE_URL: postgres://seshat:seshat@localhost:5432/seshat?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No generated files are committed
+        run: bash scripts/check-no-build-artifacts.sh
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # Into $HOME/bin rather than /usr/local/bin so the step needs no root.
+      - name: Install Tailwind
+        run: |
+          mkdir -p "$HOME/bin"
+          curl -sSL -o "$HOME/bin/tailwindcss" \
+            "https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/tailwindcss-linux-x64"
+          chmod +x "$HOME/bin/tailwindcss"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Generate templ
+        run: GOFLAGS=-mod=mod go tool templ generate
+
+      - name: Build CSS
+        run: bash scripts/build-css.sh
+
+      # Without this the exercise grader is absent, and every test that checks
+      # grading — including the cross-check that keeps the Go approximation
+      # honest — skips rather than fails. A skipped guard is not a guard.
+      - name: Build swift-validate
+        run: |
+          docker run --rm -v "$PWD/tools/swift-validate":/w -w /w swift:6.3.1 \
+            swift build -c release
+          echo "SWIFT_VALIDATE_BIN=$PWD/tools/swift-validate/.build/release/swift-validate" >> "$GITHUB_ENV"
+
+      - name: gofumpt
+        run: bash scripts/check-gofumpt.sh
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -count=1 -race
+
+      # The lesson gate needs the 4 GB compiler image, so it runs here rather
+      # than in the local `task check`: it is the difference between lessons
+      # that look right and lessons that compile for the runtime they declare.
+      - name: Build the compiler image
+        run: docker build -f build/compiler/Dockerfile -t seshat-compiler:6.3.1 .
+
+      - name: Check lessons compile and print what they claim
+        run: bash scripts/check-lessons.sh
+
+      - name: Build
+        run: go build ./...
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Install Tailwind
+        run: |
+          mkdir -p "$HOME/bin"
+          curl -sSL -o "$HOME/bin/tailwindcss" \
+            "https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/tailwindcss-linux-x64"
+          chmod +x "$HOME/bin/tailwindcss"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      # The linter type-checks, so it needs the generated code and the embedded
+      # stylesheet to exist before it runs.
+      - name: Generate templ
+        run: GOFLAGS=-mod=mod go tool templ generate
+
+      - name: Build CSS
+        run: bash scripts/build-css.sh
+
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.13.0

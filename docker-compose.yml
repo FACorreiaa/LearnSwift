@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    container_name: seshat-postgres
+    environment:
+      POSTGRES_USER: seshat
+      POSTGRES_PASSWORD: seshat
+      POSTGRES_DB: seshat
+    ports:
+      - "5442:5432"
+    volumes:
+      - seshat-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seshat -d seshat"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  # Phase 2 stores compiled .wasm artifacts here. It is in the compose file from
+  # the start so the local stack does not need a second setup step later.
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    container_name: seshat-minio
+    command: server /data --console-address ":9011"
+    environment:
+      MINIO_ROOT_USER: seshat
+      MINIO_ROOT_PASSWORD: seshatseshat
+    ports:
+      - "9010:9000"
+      - "9011:9011"
+    volumes:
+      - seshat-minio-data:/data
+
+volumes:
+  seshat-postgres-data:
+  seshat-minio-data:

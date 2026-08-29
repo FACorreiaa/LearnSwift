@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+  <style>
+    /* The tab strip has its own background, independent of the page, so the
+       mark follows the browser's colour scheme rather than the site's theme. */
+    :root { color: #1c1917; }
+    @media (prefers-color-scheme: dark) { :root { color: #fafaf9; } }
+  </style>
+  <path d="M12 1.5 14.02 8.2 20.5 5.5 16.6 11.3 23 13.8 16.1 15.1 18.2 21.6 12 18.1 5.8 21.6 7.9 15.1 1 13.8 7.4 11.3 3.5 5.5 9.98 8.2Z"/>
+</svg>

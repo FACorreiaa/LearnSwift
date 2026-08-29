@@ -1,0 +1,23 @@
+# The build context is copied into the image layer by layer; anything listed
+# here is never sent to the daemon at all.
+.git
+.github
+.claude
+
+# Secrets never belong in a build context, even in a layer that is later
+# discarded — the context itself is sent to the daemon.
+.env
+
+# Regenerated inside the image by `templ generate` and scripts/build-css.sh.
+# Copying the host's copies in would let a stale local build win over a clean
+# one, which is the exact failure .gitignore already prevents in git.
+*_templ.go
+web/assets/css/output.css
+web/assets/css/sources.generated.css
+
+# Host build output.
+/main
+/worker
+
+*.md
+!README.md
