@@ -12,6 +12,10 @@ starter: |
   }
 
   print(firstInt([3, 1, 2]) ?? 0)
+hint: >-
+  Put the placeholder in angle brackets after the function name, then use it
+  everywhere a concrete type would go — including the return, which is
+  optional because the array may be empty.
 solution: |
   func first<T>(_ items: [T]) -> T? {
       items.first

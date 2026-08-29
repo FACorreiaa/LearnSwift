@@ -13,6 +13,9 @@ starter: |
 
   let sentence = ["Hello", "World"].joined(separator: " ")
   print(sentence)
+hint: >-
+  `buildBlock` is what turns the loose lines inside the braces into one
+  value. Take them variadically and join them.
 solution: |
   @resultBuilder
   struct SentenceBuilder {

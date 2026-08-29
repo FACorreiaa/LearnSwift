@@ -10,6 +10,10 @@ starter: |
   let greeting: String? = "World"
 
   // Print "Hello, World!" — but only if greeting has a value.
+hint: >-
+  You need the value inside the box, and you are not allowed to force it
+  out. Bind it to a name first, and only use that name where it is
+  guaranteed to exist.
 solution: |
   let greeting: String? = "World"
 

@@ -20,6 +20,10 @@ starter: |
   let model = ViewModel()
   await model.load()
   print(model.title)
+hint: >-
+  Annotate the whole type rather than each method. Everything it touches is
+  then on the main actor, which is why reaching it from outside needs
+  `await`.
 solution: |
   func loadTitle() async -> String { "Loaded" }
 

@@ -9,6 +9,10 @@ starter: |
   // Give the text some padding, then a blue background — in that order, so the
   // colour extends behind the padding.
   Text("Hello, World!")
+hint: >-
+  Each modifier wraps what came before it, so the order is the answer. Pad
+  first, then paint behind the padded thing — the other way round paints
+  only the text.
 solution: |
   Text("Hello, World!")
       .padding()

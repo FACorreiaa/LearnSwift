@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <!--
+    The link preview card. Rasterised to og-default.png by scripts/build-og.sh,
+    because every scraper that matters reads PNG and almost none read SVG.
+
+    It is deliberately typographic rather than a screenshot: a screenshot of an
+    editor at 1200x630 is unreadable in a Slack unfurl, and the one thing worth
+    saying at that size is the claim.
+  -->
+  <rect width="1200" height="630" fill="#0c0a09"/>
+
+  <!-- A single hairline, so the card has an edge against a white timeline. -->
+  <rect x="0" y="0" width="1200" height="6" fill="#f59e0b"/>
+
+  <g transform="translate(96, 132)">
+    <g stroke="#f59e0b" stroke-width="2.4" fill="none" stroke-linejoin="round" transform="scale(3.2)">
+      <path d="M12 1.5 14.02 8.2 20.5 5.5 16.6 11.3 23 13.8 16.1 15.1 18.2 21.6 12 18.1 5.8 21.6 7.9 15.1 1 13.8 7.4 11.3 3.5 5.5 9.98 8.2Z"/>
+    </g>
+    <text x="106" y="56" fill="#fafaf9" font-size="34" font-weight="600" letter-spacing="8">SESHAT</text>
+  </g>
+
+  <text x="96" y="330" fill="#fafaf9" font-size="76" font-weight="700">Write Swift. Run it.</text>
+  <text x="96" y="418" fill="#fafaf9" font-size="76" font-weight="700">In your browser.</text>
+
+  <text x="96" y="496" fill="#a8a29e" font-size="32">No Mac. No Xcode. No account needed.</text>
+
+  <text x="96" y="576" fill="#78716c" font-size="26" letter-spacing="1">Short Swift and SwiftUI lessons, each with an exercise that actually executes.</text>
+</svg>

@@ -1,33 +1,194 @@
 package landing
 
+import "fmt"
+import "github.com/FACorreiaa/seshat/internal/lessons/lesson"
 import "github.com/FACorreiaa/seshat/web/shared/layout"
 import "github.com/FACorreiaa/seshat/web/shared/ui/button"
 import "github.com/FACorreiaa/seshat/web/shared/ui/icon"
 import "github.com/FACorreiaa/seshat/web/shared/utils"
+import lessonpages "github.com/FACorreiaa/seshat/web/lesson"
 
-templ Page() {
-	@layout.Public("Seshat — Learn Swift in Y Minutes") {
-		<div class="mx-auto flex max-w-3xl flex-col items-center gap-8 px-6 py-24 text-center">
-			@mascot()
-			<div class="space-y-4">
-				<h1 class="text-5xl font-bold tracking-tight text-balance">Write Swift like a scribe.</h1>
-				<p class="text-muted-foreground mx-auto max-w-md text-lg text-pretty">
-					Read the concept in 30 seconds. Try it in 10. Move on.
-				</p>
-			</div>
-			<div class="flex flex-wrap justify-center gap-3">
-				@button.Button(button.Props{Variant: button.VariantDefault, Href: "/lessons/optionals"}) {
-					@icon.BookOpen(icon.Props{Class: "size-4"})
-					Start with Optionals
+// View is what the landing page needs from the lesson index.
+//
+// The featured lesson is passed in rather than looked up here, so the page has
+// no opinion about which one it is and cannot fail at render time if the slug
+// ever changes.
+type View struct {
+	Lesson    lesson.Lesson
+	HasLesson bool
+	Tracks    []lesson.Track
+}
+
+func (v View) TotalLessons() int {
+	n := 0
+	for _, t := range v.Tracks {
+		n += len(t.Lessons)
+	}
+	return n
+}
+
+templ Page(v View) {
+	@layout.Public(layout.Meta{
+		Title:       "Seshat — Learn Swift in the browser, without a Mac",
+		Description: "Write Swift, run it, and find out if it is right — in your browser. Short lessons with exercises that actually execute. No Xcode, no download, no account needed.",
+		Path:        "/",
+	}) {
+		@hero(v)
+		if v.HasLesson {
+			@tryItNow(v)
+		}
+		@howItWorks()
+		@tracks(v)
+		@closing()
+		@heroScript()
+	}
+}
+
+// hero leads with the constraint solved rather than with the product category.
+//
+// "Learn Swift" is a category with a free, decade-old incumbent. "Swift without
+// a Mac" is a thing nobody else offers, and it is the reason this application
+// had to be built the hard way — server-side compilation to WebAssembly —
+// rather than being a website with code samples on it.
+templ hero(v View) {
+	<div class="mx-auto flex max-w-3xl flex-col items-center gap-8 px-6 pt-20 pb-12 text-center">
+		@mascot()
+		<div class="space-y-5">
+			// Broken by hand at the sentence, not left to text-balance. At this
+			// size the automatic break lands mid-clause — "Write Swift. Run / it.
+			// In your browser." — which reads as a typo rather than a rhythm.
+			<h1 class="text-5xl font-bold tracking-tight sm:text-6xl">
+				<span class="block">Write Swift. Run it.</span>
+				<span class="block">In your browser.</span>
+			</h1>
+			<p class="text-muted-foreground mx-auto max-w-xl text-lg text-pretty">
+				Read the concept in 30 seconds. Try it in 10. Your code compiles on our
+				machines and runs on yours — no Mac, no Xcode, nothing to install.
+			</p>
+		</div>
+		<div class="flex flex-wrap justify-center gap-3">
+			if v.HasLesson {
+				@button.Button(button.Props{Variant: button.VariantDefault, Href: "#try"}) {
+					@icon.Play(icon.Props{Class: "size-4"})
+					Try it right here
 				}
-				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/lessons"}) {
-					@icon.Map(icon.Props{Class: "size-4"})
-					Browse tracks
+			}
+			@button.Button(button.Props{Variant: button.VariantOutline, Href: "/lessons"}) {
+				@icon.Map(icon.Props{Class: "size-4"})
+				Browse the lessons
+			}
+		</div>
+		<p class="text-muted-foreground text-sm">Free. No account needed to start.</p>
+	</div>
+}
+
+// tryItNow is the argument.
+//
+// Everything else on this page is a claim about the product; this is the
+// product. It is the real exercise component, posting to the real grading route,
+// so a visitor settles the question of whether Swift runs in their browser by
+// doing it rather than by believing the paragraph above it.
+templ tryItNow(v View) {
+	<section id="try" class="mx-auto max-w-3xl scroll-mt-8 px-6 py-12">
+		<div class="rounded-lg border">
+			<div class="flex flex-wrap items-baseline justify-between gap-2 border-b px-4 py-3">
+				<h2 class="font-semibold">{ v.Lesson.Title }</h2>
+				<span class="text-muted-foreground text-sm">
+					{ fmt.Sprintf("%d min · no account needed", v.Lesson.Minutes) }
+				</span>
+			</div>
+			<div class="p-4">
+				<p class="text-muted-foreground mb-4 text-sm text-pretty">{ v.Lesson.Summary }</p>
+				@lessonpages.ExerciseForm(lessonpages.View{Lesson: v.Lesson})
+			</div>
+		</div>
+		<p class="text-muted-foreground mt-4 text-center text-sm">
+			<a href={ templ.SafeURL("/lessons/" + v.Lesson.Slug) } class="text-primary underline underline-offset-4">
+				Read the full lesson
+			</a>
+			&nbsp;or keep going below.
+		</p>
+	</section>
+}
+
+// howItWorks exists because the mechanism is the differentiator, and because
+// developers are the audience: telling them how it works persuades better than
+// telling them it is easy.
+templ howItWorks() {
+	<section class="border-y">
+		<div class="mx-auto max-w-4xl px-6 py-14">
+			<h2 class="text-2xl font-bold tracking-tight">There is no trick to it</h2>
+			<div class="mt-8 grid gap-8 sm:grid-cols-3">
+				@step("1", "You write Swift", "Real Swift, read by the real compiler. Not a lookalike language, not a quiz about code.")
+				@step("2", "We compile it to WebAssembly", "swiftc runs on our machines, in a container, and hands back a wasm module. Your program never runs on our servers.")
+				@step("3", "Your browser runs it", "WebAssembly is already a sandbox: no filesystem, no network, no way out. Your own machine executes it and prints the result.")
+			</div>
+			<p class="text-muted-foreground mt-8 max-w-2xl text-sm text-pretty">
+				That split is why this works on a Chromebook, a Windows laptop, or a
+				phone on a bus. Every other way to learn Swift starts by asking you to
+				buy a Mac.
+			</p>
+		</div>
+	</section>
+}
+
+templ step(n, title, body string) {
+	<div class="space-y-2">
+		<span class="bg-primary/10 text-primary grid size-8 place-items-center rounded-full text-sm font-semibold">
+			{ n }
+		</span>
+		<h3 class="font-semibold">{ title }</h3>
+		<p class="text-muted-foreground text-sm text-pretty">{ body }</p>
+	</div>
+}
+
+templ tracks(v View) {
+	<section class="mx-auto max-w-4xl px-6 py-14">
+		<div class="flex flex-wrap items-baseline justify-between gap-2">
+			<h2 class="text-2xl font-bold tracking-tight">What is here so far</h2>
+			<p class="text-muted-foreground text-sm">
+				{ fmt.Sprintf("%d lessons across %d tracks", v.TotalLessons(), len(v.Tracks)) }
+			</p>
+		</div>
+		<ul class="mt-8 grid gap-3 sm:grid-cols-2">
+			for _, t := range v.Tracks {
+				<li>
+					<a
+						href="/lessons"
+						class="hover:border-primary/50 hover:bg-muted/40 flex items-baseline justify-between gap-4 rounded-lg border px-4 py-3 transition-colors"
+					>
+						<span class="font-medium">{ t.Title }</span>
+						<span class="text-muted-foreground shrink-0 text-sm">
+							{ fmt.Sprintf("%d lessons", len(t.Lessons)) }
+						</span>
+					</a>
+				</li>
+			}
+		</ul>
+	</section>
+}
+
+templ closing() {
+	<section class="border-t">
+		<div class="mx-auto flex max-w-3xl flex-col items-center gap-5 px-6 py-16 text-center">
+			<h2 class="text-3xl font-bold tracking-tight text-balance">
+				Start with the first lesson.
+			</h2>
+			<p class="text-muted-foreground max-w-md text-pretty">
+				An account exists only to remember where you got to. Everything works
+				without one.
+			</p>
+			<div class="flex flex-wrap justify-center gap-3">
+				@button.Button(button.Props{Variant: button.VariantDefault, Href: "/lessons"}) {
+					@icon.BookOpen(icon.Props{Class: "size-4"})
+					Browse the lessons
+				}
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/register"}) {
+					Create an account
 				}
 			</div>
 		</div>
-		@heroScript()
-	}
+	</section>
 }
 
 // mascot layers the 3D canvas over the static mark rather than replacing it.

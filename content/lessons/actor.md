@@ -22,6 +22,10 @@ starter: |
   let counter = Counter()
   counter.increment()
   print(counter.current())
+hint: >-
+  Make the type an `actor` instead of a class and its mutable state is
+  protected for you. Reaching in from outside then costs an `await` on every
+  call.
 solution: |
   actor Counter {
       private var value = 0

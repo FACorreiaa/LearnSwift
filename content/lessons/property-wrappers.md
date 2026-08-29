@@ -13,6 +13,10 @@ starter: |
 
   var volume = 11
   print(volume)
+hint: >-
+  The wrapper needs `wrappedValue` and an `init(wrappedValue:)`, and both
+  have to clamp. Setting a property runs the setter, so the ceiling belongs
+  there too, not only at initialisation.
 solution: |
   @propertyWrapper
   struct Clamped {

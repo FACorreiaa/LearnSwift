@@ -44,6 +44,20 @@ type Config struct {
 	// times in output size.
 	ModuleCacheBytes int
 
+	// MaxConcurrentCompiles caps how many container compiles run at once.
+	//
+	// This is the ceiling on the most expensive thing the app does, and it is
+	// what stands between a burst of traffic and a host with a hundred `swiftc`
+	// processes on it. Tune to the compiler host's cores, not to the web
+	// process's — the containers are where the work lands.
+	MaxConcurrentCompiles int
+
+	// PostHogAPIKey and PostHogHost configure product analytics. An empty key
+	// disables capture entirely: the app runs, nothing is sent, and no
+	// credential has to exist to develop against it.
+	PostHogAPIKey string
+	PostHogHost   string
+
 	// AssetDir is where assets are read from in development. Production ignores
 	// it and serves the copies embedded in the binary.
 	//
@@ -75,9 +89,13 @@ func Load() (Config, error) {
 		SwiftValidateBin:  env("SWIFT_VALIDATE_BIN", ""),
 		ContainerRuntime:  env("CONTAINER_RUNTIME", "docker"),
 		CompilerImage:     env("COMPILER_IMAGE", ""),
-		LogLevel:          env("LOG_LEVEL", "info"),
-		LogFormat:         env("LOG_FORMAT", ""),
-		ShutdownTimeout:   30 * time.Second,
+		PostHogAPIKey:     env("POSTHOG_API_KEY", ""),
+		// EU region by default: the app is operated from the EU and its
+		// visitors' events have no reason to cross the Atlantic first.
+		PostHogHost:     strings.TrimSuffix(env("POSTHOG_HOST", "https://eu.i.posthog.com"), "/"),
+		LogLevel:        env("LOG_LEVEL", "info"),
+		LogFormat:       env("LOG_FORMAT", ""),
+		ShutdownTimeout: 30 * time.Second,
 	}
 
 	cacheBytes, err := envInt("MODULE_CACHE_BYTES", 256<<20)
@@ -85,6 +103,15 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	c.ModuleCacheBytes = cacheBytes
+
+	maxCompiles, err := envInt("MAX_CONCURRENT_COMPILES", 4)
+	if err != nil {
+		return Config{}, err
+	}
+	if maxCompiles < 1 {
+		return Config{}, fmt.Errorf("config: MAX_CONCURRENT_COMPILES must be at least 1, got %d", maxCompiles)
+	}
+	c.MaxConcurrentCompiles = maxCompiles
 
 	autoMigrate, err := envBool("AUTO_MIGRATE", !c.IsProduction())
 	if err != nil {

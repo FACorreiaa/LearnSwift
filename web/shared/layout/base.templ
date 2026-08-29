@@ -4,27 +4,54 @@ package layout
 // the fonts, the stylesheet and the two scripts the whole app depends on, and
 // nothing else — the visible shell lives in Public and App so a signed-out page
 // and a signed-in page can differ without either one owning the document.
-templ Base(title string) {
+templ Base(m Meta) {
 	<!DOCTYPE html>
 	<html lang="en" class="h-full">
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<meta name="description" content={ m.description() }/>
+			if c := m.canonical(); c != "" {
+				<link rel="canonical" href={ c }/>
+			}
+			// Open Graph and the Twitter card. Without these every link to this
+			// site — in Slack, on X, in a Discord channel, in a Reddit comment —
+			// renders as a bare grey box, which is most of the first impression
+			// anyone gets before they ever reach a page.
+			<meta property="og:type" content="website"/>
+			<meta property="og:site_name" content="Seshat"/>
+			<meta property="og:title" content={ m.Title }/>
+			<meta property="og:description" content={ m.description() }/>
+			if c := m.canonical(); c != "" {
+				<meta property="og:url" content={ c }/>
+			}
+			if img := m.imageURL(); img != "" {
+				<meta property="og:image" content={ img }/>
+				<meta name="twitter:image" content={ img }/>
+			}
+			<meta name="twitter:card" content="summary_large_image"/>
+			<meta name="twitter:title" content={ m.Title }/>
+			<meta name="twitter:description" content={ m.description() }/>
 			// Read by htmx as it initialises, so it must precede the script tag
 			// rather than being set from JavaScript afterwards.
 			//
 			// htmx discards non-2xx responses by default, which throws away the
-			// two failures this app most needs to render: 422 carries a form or
-			// an exercise result with inline diagnostics, and 429 carries the
-			// quota panel. Both are answers, not errors, and both are meant to
-			// be swapped into the page.
+			// three failures this app most needs to render: 422 carries a form or
+			// an exercise result with inline diagnostics, 429 carries the quota
+			// panel, and 503 carries "the grader could not run — this is our
+			// fault, not your code's". All three are answers, not errors, and all
+			// three are meant to be swapped into the page.
+			//
+			// 503 in particular: without it, a learner whose submission hits an
+			// unavailable compiler sees absolutely nothing happen, which is a
+			// worse outcome than the wrong verdict the panel exists to avoid.
 			<meta
 				name="htmx-config"
-				content='{"responseHandling":[{"code":"422","swap":true},{"code":"429","swap":true},{"code":"[23]..","swap":true},{"code":"[45]..","swap":false,"error":true}]}'
+				content='{"responseHandling":[{"code":"422","swap":true},{"code":"429","swap":true},{"code":"503","swap":true},{"code":"[23]..","swap":true},{"code":"[45]..","swap":false,"error":true}]}'
 			/>
 			<link rel="preload" href="/assets/fonts/geist/geist-variable.woff2" as="font" type="font/woff2" crossorigin="anonymous"/>
 			<link rel="preload" href="/assets/fonts/geist/geist-mono-variable.woff2" as="font" type="font/woff2" crossorigin="anonymous"/>
-			<title>{ title }</title>
+			<title>{ m.Title }</title>
 			<link href="/assets/css/output.css" rel="stylesheet"/>
 			@themeScript()
 			<script src="/assets/js/vendor/htmx.min.js"></script>
@@ -37,8 +64,8 @@ templ Base(title string) {
 }
 
 // Public is the shell for pages a signed-out visitor can reach.
-templ Public(title string) {
-	@Base(title) {
+templ Public(m Meta) {
+	@Base(m) {
 		<div class="flex h-full flex-col">
 			@Navbar()
 			<main class="flex-1">

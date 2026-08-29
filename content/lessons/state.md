@@ -20,6 +20,10 @@ starter: |
           }
       }
   }
+hint: >-
+  The view is a struct, so an ordinary `var` cannot survive being rebuilt.
+  `@State` moves the storage outside the view, where SwiftUI keeps it — and
+  it should be `private`, because nobody else owns it.
 solution: |
   struct CounterView: View {
       @State private var count = 0

@@ -18,6 +18,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/tetratelabs/wazero"
@@ -44,7 +45,19 @@ const (
 	// maxOutputBytes caps what a program can print. Without it, `while true {
 	// print("x") }` fills memory rather than timing out.
 	maxOutputBytes = 64 << 10
+
+	// admissionTimeout bounds how long a submission waits for a compile slot
+	// before being turned away. Long enough to ride out a burst, short enough
+	// that a queue cannot grow into a request pile-up: the caller is a person
+	// watching a spinner, and telling them to try again beats holding the
+	// connection for a minute.
+	admissionTimeout = 10 * time.Second
 )
+
+// ErrBusy means every compile slot was taken for longer than a submission is
+// worth waiting. It is an operational condition, not a verdict on the code, so
+// callers must report it as "try again", never as a failed check.
+var ErrBusy = errors.New("executor: compiler is busy")
 
 // Result is the outcome of compiling and running one submission.
 type Result struct {
@@ -90,14 +103,30 @@ type Executor struct {
 	// seconds every time — the spike measured 4.1s cold against 21ms for the
 	// embedded build — because wazero recompiles 7.7 MB of wasm on each run.
 	compilationCache wazero.CompilationCache
+
+	// compileSlots admits a bounded number of concurrent container compiles.
+	//
+	// A per-caller rate limit bounds how often one visitor may ask; it says
+	// nothing about how many visitors may ask at once. Without this, a hundred
+	// simultaneous submissions become a hundred concurrent `swiftc` containers
+	// and the host falls over — which is precisely what arriving on a front
+	// page looks like. Nil means unbounded, which only the test helpers use.
+	compileSlots chan struct{}
 }
 
-func New(c Compiler, cache Cache) *Executor {
-	return &Executor{
+// New builds an Executor admitting at most maxConcurrentCompiles container
+// compiles at once. Zero or less means unbounded, which is right for a test and
+// wrong for anything serving the internet.
+func New(c Compiler, cache Cache, maxConcurrentCompiles int) *Executor {
+	e := &Executor{
 		compiler:         c,
 		cache:            cache,
 		compilationCache: wazero.NewCompilationCache(),
 	}
+	if maxConcurrentCompiles > 0 {
+		e.compileSlots = make(chan struct{}, maxConcurrentCompiles)
+	}
+	return e
 }
 
 func (e *Executor) Close(ctx context.Context) error {
@@ -105,6 +134,35 @@ func (e *Executor) Close(ctx context.Context) error {
 }
 
 func (e *Executor) Available() bool { return e.compiler != nil && e.compiler.Available() }
+
+// toolchainVersion is baked into every cache key, so upgrading Swift discards
+// every module rather than serving one built by a compiler no longer installed.
+const toolchainVersion = "swift-6.3.1"
+
+// admit takes a compile slot, returning the function that gives it back.
+//
+// It waits, rather than refusing immediately, because a burst that clears in a
+// second should look like a slightly slow check and not like an outage. What it
+// will not do is wait indefinitely: past admissionTimeout the honest answer is
+// that the compiler is busy.
+func (e *Executor) admit(ctx context.Context) (release func(), err error) {
+	if e.compileSlots == nil {
+		return func() {}, nil
+	}
+
+	timer := time.NewTimer(admissionTimeout)
+	defer timer.Stop()
+
+	select {
+	case e.compileSlots <- struct{}{}:
+		var once sync.Once
+		return func() { once.Do(func() { <-e.compileSlots }) }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-timer.C:
+		return nil, ErrBusy
+	}
+}
 
 // CacheKey identifies a compiled module.
 //
@@ -118,20 +176,43 @@ func CacheKey(source string, rt lesson.Runtime, toolchain string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// Cached reports whether this exact submission already has a compiled module.
+//
+// It exists so a caller can tell an expensive submission from a free one before
+// deciding to charge it against a quota. Resubmitting unchanged code costs a
+// hash and a wasm instantiation — metering that would bill a learner for the
+// one action that costs nothing.
+func (e *Executor) Cached(source string, rt lesson.Runtime) bool {
+	if e.cache == nil || !rt.Executable() {
+		return false
+	}
+	_, ok := e.cache.Get(CacheKey(source, rt, toolchainVersion))
+	return ok
+}
+
 // Run compiles source if needed, then executes it.
 func (e *Executor) Run(ctx context.Context, source string, rt lesson.Runtime) (Result, error) {
 	if !e.Available() {
 		return Result{}, compiler.ErrUnavailable
 	}
 
-	key := CacheKey(source, rt, "swift-6.3.1")
+	key := CacheKey(source, rt, toolchainVersion)
 
 	module, cached := e.cache.Get(key)
 	if !cached {
-		out, err := e.compiler.Compile(ctx, source, rt)
+		// Admission is taken only on the path that spawns a container. A cache
+		// hit runs entirely in this process and has nothing worth queueing for.
+		release, err := e.admit(ctx)
 		if err != nil {
 			return Result{}, err
 		}
+
+		out, err := e.compiler.Compile(ctx, source, rt)
+		if err != nil {
+			release()
+			return Result{}, err
+		}
+		release()
 		if !out.OK() {
 			// A compile failure is a result, not an error: the learner needs
 			// to read the diagnostics, and nothing went wrong operationally.

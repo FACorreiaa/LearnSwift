@@ -15,7 +15,11 @@ type Form struct {
 func (f Form) Err(field string) string { return f.Errors[field] }
 
 templ LoginPage(form Form) {
-	@layout.Public("Sign in — Seshat") {
+	@layout.Public(layout.Meta{
+		Title:       "Sign in — Seshat",
+		Description: "Sign in to save your progress through the Swift lessons.",
+		Path:        "/login",
+	}) {
 		@shell("Sign in", "New here?", "/register", "Create an account") {
 			@LoginForm(form)
 		}
@@ -39,7 +43,11 @@ templ LoginForm(form Form) {
 }
 
 templ RegisterPage(form Form) {
-	@layout.Public("Create an account — Seshat") {
+	@layout.Public(layout.Meta{
+		Title:       "Create an account — Seshat",
+		Description: "Create an account to save your progress through the Swift lessons.",
+		Path:        "/register",
+	}) {
 		@shell("Create an account", "Already have one?", "/login", "Sign in") {
 			@RegisterForm(form)
 		}

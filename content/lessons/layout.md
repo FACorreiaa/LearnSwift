@@ -9,6 +9,9 @@ starter: |
   // Put these side by side with the price pushed to the trailing edge.
   Text("Total")
   Text("£42")
+hint: >-
+  `HStack` lays its children out in a row. To push the two ends apart, put
+  something between them that takes all the space it can get.
 solution: |
   HStack {
       Text("Total")

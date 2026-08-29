@@ -14,6 +14,9 @@ starter: |
 
   // Keep only the even numbers, using filter and a closure.
   print(numbers)
+hint: >-
+  `filter` keeps the items whose closure returns true. Inside a one-line
+  closure the argument already has a name: `$0`.
 solution: |
   let numbers = [5, 2, 8, 1]
 

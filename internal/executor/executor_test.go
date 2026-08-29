@@ -52,7 +52,7 @@ func newExecutor(t *testing.T) *Executor {
 		t.Skipf("compiler unavailable (%v); build it with `task compiler:build`", err)
 	}
 
-	e := New(compiler.New("docker", image), NewMemoryCache(0))
+	e := New(compiler.New("docker", image), NewMemoryCache(0), 0)
 	t.Cleanup(func() { _ = e.Close(context.Background()) })
 	return e
 }
@@ -208,7 +208,7 @@ if let data = FileManager.default.contents(atPath: "/etc/passwd") {
 }
 
 func TestAnUnavailableCompilerIsAnErrorNotAFailedSubmission(t *testing.T) {
-	e := New(compiler.New("docker", ""), NewMemoryCache(0))
+	e := New(compiler.New("docker", ""), NewMemoryCache(0), 0)
 	defer func() { _ = e.Close(context.Background()) }()
 
 	if _, err := e.Run(context.Background(), `print("x")`, lesson.RuntimeEmbedded); err == nil {

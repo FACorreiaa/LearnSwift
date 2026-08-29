@@ -95,8 +95,20 @@ type Lesson struct {
 
 	Starter string
 
-	// Solution is never sent to the browser. It exists so a test can prove the
-	// assertions actually accept a correct answer.
+	// Hint is one sentence pointing at the shape of the answer without giving
+	// it away, offered after a couple of failed attempts. It is held back until
+	// then by the handler rather than hidden by the template: a hint sitting in
+	// the DOM behind a CSS rule is a hint, revealed.
+	Hint string
+
+	// Solution is not sent to the browser with the lesson. It exists so a test
+	// can prove the assertions actually accept a correct answer, and so a
+	// learner who is genuinely stuck can ask for it — which is a separate
+	// request, gated on having tried, and recorded when it is granted.
+	//
+	// The default of withholding it is right. Withholding it absolutely is not:
+	// a learner stuck on their fourth attempt with no way forward does not
+	// persevere, they leave.
 	Solution   string
 	Assertions Assertions
 }

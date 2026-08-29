@@ -10,6 +10,9 @@ starter: |
 
   // `await` is only legal in an async context. Open one.
   print("Hello, \(fetchName())!")
+hint: >-
+  `Task { }` starts async work from ordinary code. To make the program wait
+  for it, hold onto the handle and await its `value`.
 solution: |
   func fetchName() async -> String { "World" }
 
