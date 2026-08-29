@@ -1,0 +1,3 @@
+module SwiftSyntaxBuilder {
+    header "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftSyntaxBuilder.build/include/SwiftSyntaxBuilder-Swift.h"
+}

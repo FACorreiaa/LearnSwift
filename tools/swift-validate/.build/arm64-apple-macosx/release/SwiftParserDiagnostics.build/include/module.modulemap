@@ -1,0 +1,3 @@
+module SwiftParserDiagnostics {
+    header "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftParserDiagnostics.build/include/SwiftParserDiagnostics-Swift.h"
+}

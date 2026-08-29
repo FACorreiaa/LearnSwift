@@ -1,0 +1,194 @@
+package lesson
+
+import (
+	"fmt"
+	"github.com/FACorreiaa/seshat/internal/validate"
+	"github.com/FACorreiaa/seshat/web/shared/layout"
+	"github.com/FACorreiaa/seshat/web/shared/utils"
+)
+
+// Result is the outcome of one submission, or the zero value before anything
+// has been submitted.
+type Result struct {
+	Submitted bool
+	Passed    bool
+	Code      string
+
+	Failures    []validate.Failure
+	Diagnostics []validate.Diagnostic
+
+	// CompileFailed means swiftc rejected the code. CompilerOutput carries its
+	// diagnostics verbatim — Swift's compiler errors are better than anything
+	// that would survive being reformatted, so they are shown as written.
+	CompileFailed  bool
+	CompilerOutput string
+
+	// TimedOut means the program ran too long and was stopped. Almost always
+	// an accidental infinite loop.
+	TimedOut bool
+
+	// Stdout is what the program printed, shown whether it passed or not: a
+	// learner comparing their output to the expectation needs to see it.
+	Stdout   string
+	Stderr   string
+	ExitCode uint32
+
+	// Pending means every static check passed but the lesson also has
+	// assertions that require running the code, which the compile pipeline
+	// does not exist yet to do. The submission is therefore not known to be
+	// correct, and must not be reported as such.
+	Pending bool
+
+	// Unavailable means the grader could not run at all. Shown differently from
+	// a wrong answer, because telling someone their correct code is wrong
+	// because a binary is missing is the worst outcome available here.
+	Unavailable bool
+}
+
+templ exercise(v View) {
+	<section id="exercise" class="mt-10 rounded-lg border">
+		<h2 class="border-b px-4 py-3 font-semibold">Exercise</h2>
+		<div class="p-4">
+			if v.Lesson.Assertions.HasStatic() {
+				@exerciseForm(v)
+				if !v.Lesson.Runtime.Executable() {
+					// Said plainly rather than by omission. Checking still
+					// works — reading the code is not the same as running it —
+					// and a reader who has run code in another lesson will
+					// otherwise assume this panel is broken.
+					<p class="text-muted-foreground mt-3 text-sm">
+						Your code is checked by reading it, not running it: SwiftUI is an
+						Apple-only framework with no WebAssembly build.
+					</p>
+				}
+			} else {
+				<pre class="bg-muted overflow-x-auto rounded-md p-4 text-sm"><code>{ v.Lesson.Starter }</code></pre>
+				<p class="text-muted-foreground mt-3 text-sm">
+					This exercise has nothing that can be checked automatically yet.
+					Compare your answer with the lesson.
+				</p>
+			}
+		</div>
+	</section>
+}
+
+templ exerciseForm(v View) {
+	<form
+		hx-post={ "/lessons/" + v.Lesson.Slug + "/check" }
+		hx-target="#exercise-result"
+		hx-swap="outerHTML"
+		hx-disabled-elt="find button"
+	>
+		@layout.CSRFInput()
+		<label for="code" class="sr-only">Your Swift code</label>
+		<textarea
+			id="code"
+			name="code"
+			data-editor
+			rows="14"
+			spellcheck="false"
+			autocapitalize="off"
+			autocomplete="off"
+			autocorrect="off"
+			class="bg-muted focus-visible:ring-ring w-full resize-y rounded-md p-4 font-mono text-sm focus-visible:ring-2 focus-visible:outline-none"
+		>{ starterFor(v) }</textarea>
+		<div class="mt-3 flex flex-wrap items-center gap-3">
+			<button
+				type="submit"
+				class="bg-primary text-primary-foreground hover:bg-primary/90 h-10 rounded-md px-4 text-sm font-medium disabled:opacity-60"
+			>
+				Check
+			</button>
+			<span class="text-muted-foreground text-sm htmx-indicator">Checking…</span>
+			// Tab indents rather than moving focus, which a keyboard user has to
+			// be told rather than left to discover by getting stuck.
+			<span class="text-muted-foreground ml-auto text-xs">
+				Tab indents · Esc then Tab leaves · ⌘/Ctrl+Enter checks
+			</span>
+		</div>
+	</form>
+	@ResultPanel(v.Result)
+	@editorScript()
+}
+
+var editorScriptOnce = templ.NewOnceHandle()
+
+templ editorScript() {
+	@editorScriptOnce.Once() {
+		if nonce := templ.GetNonce(ctx); nonce != "" {
+			<script nonce={ nonce } defer src={ utils.ScriptURL("/assets/js/lesson/editor.js") }></script>
+		} else {
+			<script defer src={ utils.ScriptURL("/assets/js/lesson/editor.js") }></script>
+		}
+	}
+}
+
+// starterFor keeps whatever the learner last submitted, so a failed check does
+// not throw away their work.
+func starterFor(v View) string {
+	if v.Result.Code != "" {
+		return v.Result.Code
+	}
+	return v.Lesson.Starter
+}
+
+// ResultPanel is swapped in on its own by htmx, so checking an answer does not
+// reload the lesson or lose the editor's scroll position.
+templ ResultPanel(r Result) {
+	<div id="exercise-result" class="mt-4">
+		if r.Unavailable {
+			<p class="border-muted-foreground/30 text-muted-foreground rounded-md border border-dashed px-3 py-2 text-sm">
+				Checking is unavailable right now, so your answer could not be graded.
+				This is a problem on our side, not with your code.
+			</p>
+		} else if r.Submitted && r.CompileFailed {
+			<div class="space-y-2">
+				<p class="text-muted-foreground text-sm">Your code did not compile.</p>
+				<pre class="bg-destructive/10 text-destructive overflow-x-auto rounded-md p-3 font-mono text-xs" role="alert">{ r.CompilerOutput }</pre>
+			</div>
+		} else if r.Submitted && r.TimedOut {
+			<p class="bg-destructive/10 text-destructive rounded-md px-3 py-2 text-sm" role="alert">
+				Your code ran too long and was stopped. The usual cause is a loop with no
+				way out.
+			</p>
+		} else if r.Submitted && r.Pending {
+			<p class="border-muted-foreground/30 text-muted-foreground rounded-md border border-dashed px-3 py-2 text-sm" role="status">
+				No problems found in your code. Checking the output it produces needs
+				Swift to actually run, which is not wired up yet — so this is not a
+				pass, only the absence of a failure.
+			</p>
+		} else if r.Submitted && r.Passed {
+			<div class="space-y-2">
+				<p class="rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400" role="status">
+					That's right.
+				</p>
+				@outputBlock(r)
+			</div>
+		} else if r.Submitted {
+			<div class="bg-destructive/10 space-y-2 rounded-md px-3 py-2 text-sm" role="alert">
+				for _, d := range r.Diagnostics {
+					<p class="text-destructive">
+						<span class="font-mono">{ fmt.Sprintf("line %d:%d", d.Line, d.Column) }</span>
+						&nbsp;{ d.Message }
+					</p>
+				}
+				for _, f := range r.Failures {
+					<p class="text-destructive">{ f.Message }</p>
+				}
+			</div>
+			@outputBlock(r)
+		}
+	</div>
+}
+
+// outputBlock shows what the program actually printed. It appears on success as
+// well as failure: seeing the output is most of what makes running the code
+// worth doing at all.
+templ outputBlock(r Result) {
+	if r.Stdout != "" || r.Stderr != "" {
+		<div class="mt-2">
+			<p class="text-muted-foreground mb-1 text-xs font-medium">Output</p>
+			<pre class="bg-muted overflow-x-auto rounded-md p-3 font-mono text-xs">{ r.Stdout }{ r.Stderr }</pre>
+		</div>
+	}
+}

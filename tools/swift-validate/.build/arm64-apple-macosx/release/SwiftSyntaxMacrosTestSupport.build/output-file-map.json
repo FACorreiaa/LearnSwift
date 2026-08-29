@@ -1,0 +1,13 @@
+{
+  "": {
+    "dependencies": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftSyntaxMacrosTestSupport.build/SwiftSyntaxMacrosTestSupport.d",
+    "object": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftSyntaxMacrosTestSupport.build/SwiftSyntaxMacrosTestSupport.o",
+    "swift-dependencies": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftSyntaxMacrosTestSupport.build/primary.swiftdeps"
+  },
+  "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/checkouts/swift-syntax/Sources/SwiftSyntaxMacrosTestSupport/Assertions.swift": {
+    "object": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftSyntaxMacrosTestSupport.build/Assertions.swift.o",
+    "swiftmodule": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftSyntaxMacrosTestSupport.build/Assertions~partial.swiftmodule",
+    "swift-dependencies": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftSyntaxMacrosTestSupport.build/Assertions.swiftdeps",
+    "diagnostics": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftSyntaxMacrosTestSupport.build/Assertions.dia"
+  }
+}

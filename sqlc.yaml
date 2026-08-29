@@ -1,0 +1,68 @@
+version: "2"
+
+sql:
+  # The first entry defines the anchors every later slice reuses. A new slice
+  # copies the block at the bottom and changes only queries/package/out — never
+  # the settings, which is the point of the anchors.
+  - &auth
+    engine: postgresql
+    queries: internal/auth/db/queries.sql
+    schema: migrations
+    gen:
+      go: &gen
+        package: authdb
+        out: internal/auth/db
+        sql_package: pgx/v5
+
+        # Load-bearing with one sqlc package per slice. Without it every
+        # package regenerates every model in the whole schema; North measured
+        # 22,866 duplicate lines across 33 packages before turning it on.
+        omit_unused_structs: true
+
+        # A nullable column with no type override becomes *T rather than a
+        # wrapper, so a missing value reads as nil at the call site instead of
+        # needing a .Valid check nobody remembers. See the note below for why
+        # that does not extend to the overridden types.
+        emit_pointers_for_null_types: true
+
+        # A query returning no rows gives []T{} rather than nil, so a template
+        # ranging over it does not have to special-case the empty case.
+        emit_empty_slices: true
+
+        # Only the non-nullable forms are overridden here, deliberately.
+        #
+        # sqlc does not combine an override with emit_pointers_for_null_types
+        # in any usable way. Measured on sqlc v1.31.1, for a nullable
+        # timestamptz:
+        #
+        #   nullable override "time.Time"   -> time.Time     nullability lost;
+        #                                                    NULL reads as the
+        #                                                    zero time
+        #   nullable override "*time.Time"  -> **time.Time   compiles; awful
+        #   no nullable override            -> pgtype.Timestamptz
+        #
+        # No spelling yields *time.Time, so the last is the only honest option:
+        # pgtype carries an explicit .Valid, and the repository converts it to
+        # *time.Time at the edge of the slice. That keeps the generated type out
+        # of the domain model, which is where it belongs anyway.
+        #
+        # Dropping the non-nullable overrides as well is not the answer — that
+        # turns *every* timestamp into pgtype.Timestamptz, including columns
+        # that are NOT NULL and have nothing to report.
+        #
+        # North's sqlc.yaml carries the "*T" nullable variants, so any nullable
+        # uuid or timestamptz column over there is a **T.
+        overrides: &overrides
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+
+  - <<: *auth
+    queries: internal/progress/db/queries.sql
+    gen:
+      go:
+        <<: *gen
+        package: progressdb
+        out: internal/progress/db
+        overrides: *overrides

@@ -1,0 +1,13 @@
+{
+  "": {
+    "dependencies": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftSyntax600.build/SwiftSyntax600.d",
+    "object": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftSyntax600.build/SwiftSyntax600.o",
+    "swift-dependencies": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftSyntax600.build/primary.swiftdeps"
+  },
+  "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/checkouts/swift-syntax/Sources/VersionMarkerModules/SwiftSyntax600/Empty.swift": {
+    "object": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftSyntax600.build/Empty.swift.o",
+    "swiftmodule": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftSyntax600.build/Empty~partial.swiftmodule",
+    "swift-dependencies": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftSyntax600.build/Empty.swiftdeps",
+    "diagnostics": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftSyntax600.build/Empty.dia"
+  }
+}

@@ -1,0 +1,128 @@
+/* Syntax highlighting.
+ *
+ * Chroma is configured with WithClasses(true) in internal/lessons/parse.go, so
+ * the rendered markup carries class names and no inline styles. That is what
+ * lets the same HTML be legible in both themes — an inline style attribute
+ * would pin one palette into the lesson content itself.
+ *
+ * Only the token classes Swift actually produces are defined. Chroma emits many
+ * more, and every one that is left undefined simply inherits the code block's
+ * foreground colour, which is a perfectly good default.
+ */
+
+:root {
+  --code-bg: oklch(0.97 0.002 250);
+  --code-fg: oklch(0.28 0.01 250);
+  --code-comment: oklch(0.55 0.02 250);
+  --code-keyword: oklch(0.48 0.18 305);
+  --code-type: oklch(0.5 0.12 220);
+  --code-string: oklch(0.48 0.13 145);
+  --code-number: oklch(0.52 0.14 40);
+  --code-func: oklch(0.48 0.14 260);
+  --code-punct: oklch(0.5 0.01 250);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --code-bg: oklch(0.21 0.008 250);
+    --code-fg: oklch(0.9 0.005 250);
+    --code-comment: oklch(0.62 0.015 250);
+    --code-keyword: oklch(0.76 0.14 305);
+    --code-type: oklch(0.79 0.1 220);
+    --code-string: oklch(0.79 0.12 145);
+    --code-number: oklch(0.8 0.11 60);
+    --code-func: oklch(0.78 0.11 260);
+    --code-punct: oklch(0.68 0.01 250);
+  }
+}
+
+/* The theme switcher sets .dark on <html> explicitly, which must win over the
+ * media query above in both directions. */
+.dark {
+  --code-bg: oklch(0.21 0.008 250);
+  --code-fg: oklch(0.9 0.005 250);
+  --code-comment: oklch(0.62 0.015 250);
+  --code-keyword: oklch(0.76 0.14 305);
+  --code-type: oklch(0.79 0.1 220);
+  --code-string: oklch(0.79 0.12 145);
+  --code-number: oklch(0.8 0.11 60);
+  --code-func: oklch(0.78 0.11 260);
+  --code-punct: oklch(0.68 0.01 250);
+}
+
+.chroma {
+  background-color: var(--code-bg);
+  color: var(--code-fg);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  /* A long line scrolls inside the block rather than widening the page. */
+  overflow-x: auto;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.chroma .c,
+.chroma .ch,
+.chroma .cm,
+.chroma .c1,
+.chroma .cs,
+.chroma .cp {
+  color: var(--code-comment);
+  font-style: italic;
+}
+
+.chroma .k,
+.chroma .kc,
+.chroma .kd,
+.chroma .kn,
+.chroma .kp,
+.chroma .kr {
+  color: var(--code-keyword);
+}
+
+.chroma .kt,
+.chroma .nc,
+.chroma .nb {
+  color: var(--code-type);
+}
+
+.chroma .s,
+.chroma .s1,
+.chroma .s2,
+.chroma .sb,
+.chroma .sc,
+.chroma .sd,
+.chroma .se,
+.chroma .sh,
+.chroma .si,
+.chroma .sx {
+  color: var(--code-string);
+}
+
+.chroma .m,
+.chroma .mb,
+.chroma .mf,
+.chroma .mh,
+.chroma .mi,
+.chroma .mo,
+.chroma .il {
+  color: var(--code-number);
+}
+
+.chroma .nf,
+.chroma .fm {
+  color: var(--code-func);
+}
+
+.chroma .o,
+.chroma .ow,
+.chroma .p {
+  color: var(--code-punct);
+}
+
+/* Chroma marks text it could not lex as an error. Colouring it red would be
+ * alarming and wrong — an unlexed token in a correct Swift sample is a gap in
+ * the lexer, not a mistake in the lesson. */
+.chroma .err {
+  color: inherit;
+}

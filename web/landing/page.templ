@@ -1,0 +1,64 @@
+package landing
+
+import "github.com/FACorreiaa/seshat/web/shared/layout"
+import "github.com/FACorreiaa/seshat/web/shared/ui/button"
+import "github.com/FACorreiaa/seshat/web/shared/ui/icon"
+import "github.com/FACorreiaa/seshat/web/shared/utils"
+
+templ Page() {
+	@layout.Public("Seshat — Learn Swift in Y Minutes") {
+		<div class="mx-auto flex max-w-3xl flex-col items-center gap-8 px-6 py-24 text-center">
+			@mascot()
+			<div class="space-y-4">
+				<h1 class="text-5xl font-bold tracking-tight text-balance">Write Swift like a scribe.</h1>
+				<p class="text-muted-foreground mx-auto max-w-md text-lg text-pretty">
+					Read the concept in 30 seconds. Try it in 10. Move on.
+				</p>
+			</div>
+			<div class="flex flex-wrap justify-center gap-3">
+				@button.Button(button.Props{Variant: button.VariantDefault, Href: "/lessons/optionals"}) {
+					@icon.BookOpen(icon.Props{Class: "size-4"})
+					Start with Optionals
+				}
+				@button.Button(button.Props{Variant: button.VariantOutline, Href: "/lessons"}) {
+					@icon.Map(icon.Props{Class: "size-4"})
+					Browse tracks
+				}
+			</div>
+		</div>
+		@heroScript()
+	}
+}
+
+// mascot layers the 3D canvas over the static mark rather than replacing it.
+//
+// The SVG is what renders with no JavaScript, no WebGL, or a failed module
+// load — which is to say it is the actual logo, and the canvas is an
+// enhancement. The canvas starts transparent and is only revealed once the
+// scene has drawn something, so there is no flash of an empty box.
+templ mascot() {
+	<div class="relative size-40">
+		<div data-mascot-fallback class="absolute inset-0 grid place-items-center">
+			@layout.SeshatMark("size-16 text-primary")
+		</div>
+		<canvas
+			data-mascot-canvas
+			class="absolute inset-0 size-full opacity-0 transition-opacity duration-700 motion-reduce:transition-none"
+			aria-hidden="true"
+		></canvas>
+	</div>
+}
+
+var heroScriptOnce = templ.NewOnceHandle()
+
+// The script is a module because it uses a dynamic import, and deferred because
+// nothing on this page depends on it having run.
+templ heroScript() {
+	@heroScriptOnce.Once() {
+		if nonce := templ.GetNonce(ctx); nonce != "" {
+			<script type="module" nonce={ nonce } defer src={ utils.ScriptURL("/assets/js/landing/hero.js") }></script>
+		} else {
+			<script type="module" defer src={ utils.ScriptURL("/assets/js/landing/hero.js") }></script>
+		}
+	}
+}

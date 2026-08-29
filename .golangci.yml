@@ -1,0 +1,48 @@
+# golangci-lint configuration for Seshat.
+# Keep this thin — prefer gofmt/go vet defaults over a large rule farm.
+
+version: "2"
+
+run:
+  # Generous because a cold run is slow, not because the analysis is: North hit
+  # a run that printed "0 issues." and then failed on elapsed time, having taken
+  # ~34 minutes on a runner with no build cache. A warm run is seconds.
+  #
+  # If a warm run ever approaches this, that is a regression worth chasing
+  # rather than a number worth raising again.
+  timeout: 45m
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+  settings:
+    govet:
+      enable:
+        - shadow
+
+  exclusions:
+    # templ's emitted code nests `ctx` and a buffer in every child, so
+    # govet/shadow and staticcheck SA4006 fire on every page. Those files are
+    # gitignored and rewritten by `templ generate` — lint the .templ, not the
+    # dump.
+    generated: lax
+    paths:
+      - '.*_templ\.go$'
+      # Huge auto-generated Lucide icon dumps from templUI.
+      - web/shared/ui/icon/icon_data\.go
+      - web/shared/ui/icon/icon_defs\.go
+
+formatters:
+  enable:
+    - gofumpt
+  exclusions:
+    generated: lax
+    paths:
+      - '.*_templ\.go$'
+      - web/shared/ui/icon/icon_data\.go
+      - web/shared/ui/icon/icon_defs\.go

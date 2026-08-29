@@ -1,0 +1,41 @@
+package layout
+
+import "github.com/FACorreiaa/seshat/internal/auth/user"
+
+templ Navbar() {
+	<nav class="border-border/60 border-b">
+		<div class="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
+			<a href="/" class="flex items-center gap-2">
+				@SeshatMark("size-6 text-primary")
+				<span class="text-lg tracking-tight">seshat</span>
+			</a>
+			<div class="flex items-center gap-1">
+				<a href="/lessons" class="text-muted-foreground hover:text-foreground px-3 py-2 text-sm">Lessons</a>
+				if u, ok := user.From(ctx); ok {
+					<span class="text-muted-foreground hidden px-2 text-sm sm:inline">{ u.Email }</span>
+					// A form, not a link. A GET that signs someone out can be
+					// triggered by any image tag on any page on the internet.
+					<form method="post" action="/logout" class="contents">
+						@CSRFInput()
+						<button type="submit" class="text-muted-foreground hover:text-foreground px-3 py-2 text-sm">
+							Sign out
+						</button>
+					</form>
+				} else {
+					<a href="/login" class="text-muted-foreground hover:text-foreground px-3 py-2 text-sm">Sign in</a>
+				}
+				@ThemeSwitcher()
+			</div>
+		</div>
+	</nav>
+}
+
+// SeshatMark is the seven-pointed star of Seshat's headdress, drawn as an
+// inline SVG so the identity survives with no JavaScript, no network request
+// and no 3D context. The Three.js mascot in the hero is layered over this,
+// never a replacement for it.
+templ SeshatMark(class string) {
+	<svg class={ class } viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
+		<path d="M12 1.5 14.02 8.2 20.5 5.5 16.6 11.3 23 13.8 16.1 15.1 18.2 21.6 12 18.1 5.8 21.6 7.9 15.1 1 13.8 7.4 11.3 3.5 5.5 9.98 8.2Z"></path>
+	</svg>
+}

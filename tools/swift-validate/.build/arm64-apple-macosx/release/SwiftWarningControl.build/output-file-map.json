@@ -1,0 +1,43 @@
+{
+  "": {
+    "dependencies": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/SwiftWarningControl.d",
+    "object": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/SwiftWarningControl.o",
+    "swift-dependencies": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/primary.swiftdeps"
+  },
+  "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/checkouts/swift-syntax/Sources/SwiftWarningControl/DiagnosticGroupInheritanceTree.swift": {
+    "object": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/DiagnosticGroupInheritanceTree.swift.o",
+    "swiftmodule": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/DiagnosticGroupInheritanceTree~partial.swiftmodule",
+    "swift-dependencies": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/DiagnosticGroupInheritanceTree.swiftdeps",
+    "diagnostics": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/DiagnosticGroupInheritanceTree.dia"
+  },
+  "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/checkouts/swift-syntax/Sources/SwiftWarningControl/SyntaxProtocol+WarningControl.swift": {
+    "object": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/SyntaxProtocol+WarningControl.swift.o",
+    "swiftmodule": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/SyntaxProtocol+WarningControl~partial.swiftmodule",
+    "swift-dependencies": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/SyntaxProtocol+WarningControl.swiftdeps",
+    "diagnostics": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/SyntaxProtocol+WarningControl.dia"
+  },
+  "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/checkouts/swift-syntax/Sources/SwiftWarningControl/WarningControlDeclSyntax.swift": {
+    "object": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/WarningControlDeclSyntax.swift.o",
+    "swiftmodule": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/WarningControlDeclSyntax~partial.swiftmodule",
+    "swift-dependencies": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/WarningControlDeclSyntax.swiftdeps",
+    "diagnostics": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/WarningControlDeclSyntax.dia"
+  },
+  "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/checkouts/swift-syntax/Sources/SwiftWarningControl/WarningControlRegionBuilder.swift": {
+    "object": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/WarningControlRegionBuilder.swift.o",
+    "swiftmodule": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/WarningControlRegionBuilder~partial.swiftmodule",
+    "swift-dependencies": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/WarningControlRegionBuilder.swiftdeps",
+    "diagnostics": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/WarningControlRegionBuilder.dia"
+  },
+  "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/checkouts/swift-syntax/Sources/SwiftWarningControl/WarningControlRegions.swift": {
+    "object": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/WarningControlRegions.swift.o",
+    "swiftmodule": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/WarningControlRegions~partial.swiftmodule",
+    "swift-dependencies": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/WarningControlRegions.swiftdeps",
+    "diagnostics": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/WarningControlRegions.dia"
+  },
+  "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/checkouts/swift-syntax/Sources/SwiftWarningControl/WarningGroupControl.swift": {
+    "object": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/WarningGroupControl.swift.o",
+    "swiftmodule": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/WarningGroupControl~partial.swiftmodule",
+    "swift-dependencies": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/WarningGroupControl.swiftdeps",
+    "diagnostics": "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftWarningControl.build/WarningGroupControl.dia"
+  }
+}

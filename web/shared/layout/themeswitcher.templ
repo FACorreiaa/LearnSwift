@@ -1,0 +1,80 @@
+package layout
+
+import "github.com/FACorreiaa/seshat/web/shared/ui/button"
+import "github.com/FACorreiaa/seshat/web/shared/ui/icon"
+
+var themeScriptOnce = templ.NewOnceHandle()
+
+// themeScript resolves and applies the theme.
+//
+// It lives in <head> and runs synchronously, before the body is parsed, because
+// applying the theme after first paint is visible as a flash of the wrong one.
+// That is also why it cannot move into ThemeSwitcher: the switcher is a button
+// somewhere in the body, and by the time it renders the damage is done.
+//
+// The click handler is delegated from document, so it keeps working when htmx
+// swaps a fragment containing the button.
+templ themeScript() {
+	@themeScriptOnce.Once() {
+		<script nonce={ templ.GetNonce(ctx) }>
+			(function () {
+				function preference() {
+					return localStorage.getItem('themePreference') || 'system';
+				}
+
+				function apply() {
+					const p = preference();
+					const dark = p === 'system'
+						? window.matchMedia('(prefers-color-scheme: dark)').matches
+						: p === 'dark';
+					document.documentElement.classList.toggle('dark', dark);
+					document.dispatchEvent(new CustomEvent('theme-changed'));
+				}
+
+				function cycle() {
+					const current = preference();
+					const next = current === 'system'
+						? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark')
+						: (current === 'light' ? 'dark' : 'light');
+					localStorage.setItem('themePreference', next);
+					apply();
+				}
+
+				apply();
+
+				window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+					if (preference() === 'system') apply();
+				});
+
+				document.addEventListener('click', (e) => {
+					const el = e.target.closest('[data-theme-switcher]');
+					if (!el) return;
+					e.preventDefault();
+					cycle();
+				});
+			})();
+		</script>
+	}
+}
+
+type ThemeSwitcherProps struct {
+	Class string
+}
+
+templ ThemeSwitcher(props ...ThemeSwitcherProps) {
+	{{ var p ThemeSwitcherProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	@button.Button(button.Props{
+		Size:    button.SizeIcon,
+		Variant: button.VariantGhost,
+		Class:   p.Class,
+		Attributes: templ.Attributes{
+			"data-theme-switcher": "true",
+			"aria-label":          "Switch theme",
+		},
+	}) {
+		@icon.Eclipse(icon.Props{Class: "size-5"})
+	}
+}

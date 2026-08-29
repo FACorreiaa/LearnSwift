@@ -1,0 +1,13 @@
+package layout
+
+import "github.com/FACorreiaa/seshat/internal/shared/middleware"
+
+// CSRFInput renders the hidden field every state-changing form needs.
+//
+// The token is read from the request context rather than passed in, so a form
+// cannot be written that forgets to thread it through — the only way to get it
+// wrong is to leave this component out, which fails loudly on the first submit
+// rather than silently accepting unverified requests.
+templ CSRFInput() {
+	<input type="hidden" name={ middleware.CSRFFieldName } value={ middleware.CSRFToken(ctx) }/>
+}

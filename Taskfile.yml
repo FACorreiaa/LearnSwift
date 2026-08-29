@@ -1,0 +1,211 @@
+version: "3"
+
+dotenv: [".env"]
+
+vars:
+  MIGRATIONS_DIR: ./migrations
+
+tasks:
+  # ---------------------------------------------------------------------------
+  # Development
+  # ---------------------------------------------------------------------------
+  dev:
+    desc: Start the development server with hot reload (expects the database to be up)
+    cmds:
+      - task --parallel tailwind templ
+
+  dev:up:
+    desc: Start Postgres and MinIO, then the hot-reload app
+    cmds:
+      - task: db:up
+      - task: db:wait
+      - task: dev
+
+  dev:down:
+    desc: Stop Postgres and MinIO (keeps volumes)
+    cmds:
+      - task: db:down
+
+  templ:
+    desc: Run templ with the integrated proxy and hot reload
+    deps: [port:free]
+    cmds:
+      - GOFLAGS=-mod=mod go tool templ generate --watch --proxy="http://localhost:8090" --cmd="go run ./cmd/web" --open-browser=false
+
+  tailwind:
+    desc: Watch Tailwind CSS changes
+    cmds:
+      - |
+        printf '%s\n' \
+          '@source "../../../web/**/*.templ";' \
+          '@source "../../../web/**/*.js";' \
+          > ./web/assets/css/sources.generated.css && \
+        tailwindcss -i ./web/assets/css/input.css -o ./web/assets/css/output.css --watch
+
+  # Frees the dev port if a previous run left something behind. This runs before
+  # the watcher rather than being something to remember: the whole problem with
+  # a stale process is that you find out from a confusing symptom, not an error.
+  port:free:
+    internal: true
+    cmds:
+      - lsof -ti tcp:{{.PORT | default "8090"}} -sTCP:LISTEN 2>/dev/null | xargs -r kill 2>/dev/null || true
+
+  dev:stop:
+    desc: Kill anything left holding the dev port
+    cmds:
+      - task: port:free
+
+  # ---------------------------------------------------------------------------
+  # Infrastructure
+  # ---------------------------------------------------------------------------
+  db:up:
+    desc: Start Postgres and MinIO
+    cmds:
+      - docker compose up -d --remove-orphans
+      - docker compose ps
+
+  db:down:
+    desc: Stop Postgres and MinIO (keeps volumes)
+    cmds:
+      - docker compose down --remove-orphans
+
+  db:reset:
+    desc: Destroy and recreate the database volume
+    prompt: This deletes all local database and object storage data. Continue?
+    cmds:
+      - docker compose down -v --remove-orphans
+      - task: db:up
+      - task: db:wait
+
+  db:wait:
+    desc: Block until Postgres accepts connections
+    cmds:
+      - |
+        for i in $(seq 1 30); do
+          if docker compose exec -T postgres pg_isready -U seshat -d seshat >/dev/null 2>&1; then
+            echo "postgres ready"; exit 0
+          fi
+          sleep 1
+        done
+        echo "postgres did not become ready in 30s" >&2; exit 1
+
+  psql:
+    desc: Open a psql shell against the local database
+    interactive: true
+    cmds:
+      - docker compose exec postgres psql -U seshat -d seshat
+
+  # ---------------------------------------------------------------------------
+  # Migrations (goose)
+  # ---------------------------------------------------------------------------
+  # Prefer app start for "up": the web binary calls database.Migrate on boot
+  # with the embedded SQL. These remain for inspection and authoring.
+  migrate:up:
+    desc: Apply pending migrations manually
+    cmds:
+      - go tool goose -dir {{.MIGRATIONS_DIR}} postgres "$DATABASE_URL" up
+
+  migrate:down:
+    desc: Roll back the most recent migration
+    cmds:
+      - go tool goose -dir {{.MIGRATIONS_DIR}} postgres "$DATABASE_URL" down
+
+  migrate:status:
+    desc: Show migration status
+    cmds:
+      - go tool goose -dir {{.MIGRATIONS_DIR}} postgres "$DATABASE_URL" status
+
+  migrate:new:
+    desc: "Create a new migration. Usage: task migrate:new -- add_exercise_attempts"
+    cmds:
+      - go tool goose -dir {{.MIGRATIONS_DIR}} create {{.CLI_ARGS}} sql
+
+  # ---------------------------------------------------------------------------
+  # Codegen
+  # ---------------------------------------------------------------------------
+  lessons:check:
+    desc: Compile and run every lesson solution against its declared runtime (needs the compiler image; slow)
+    cmds:
+      - bash scripts/check-lessons.sh
+
+  compiler:build:
+    desc: Build the container image that compiles and runs exercise submissions
+    cmds:
+      # ~4 GB and several minutes: a full Swift toolchain plus both WebAssembly
+      # SDKs, baked in so no submission pays for downloading them.
+      - docker build -f build/compiler/Dockerfile -t seshat-compiler:6.3.1 .
+
+  validate:build:
+    desc: Build the swift-validate binary that grades exercises
+    dir: tools/swift-validate
+    cmds:
+      # Release, because a debug build of swift-syntax is slow enough to be felt
+      # on every submission.
+      - swift build -c release
+    sources:
+      - Sources/**/*.swift
+      - Package.swift
+    generates:
+      - .build/release/swift-validate
+
+  sqlc:
+    desc: Regenerate database access code from SQL
+    cmds:
+      - sqlc generate
+
+  generate:
+    desc: Run every code generator
+    cmds:
+      - GOFLAGS=-mod=mod go tool templ generate
+      - sqlc generate
+
+  # ---------------------------------------------------------------------------
+  # Quality
+  # ---------------------------------------------------------------------------
+  assets:
+    desc: Build Tailwind CSS (required before go build/test — the CSS is gitignored)
+    cmds:
+      - bash scripts/build-css.sh
+
+  fmt:
+    desc: Format Go (gofumpt) and templ sources
+    cmds:
+      - go tool gofumpt -w .
+      # The Lucide icon dumps are generated by templUI; leave the generator's
+      # own formatting alone rather than fighting it on every commit.
+      - git checkout -- web/shared/ui/icon/icon_data.go web/shared/ui/icon/icon_defs.go 2>/dev/null || true
+      - GOFLAGS=-mod=mod go tool templ fmt .
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  test:
+    desc: Run the test suite
+    cmds:
+      - go test ./...
+
+  build:
+    desc: Build all binaries
+    cmds:
+      - GOFLAGS=-mod=mod go tool templ generate
+      - task: assets
+      - go build ./...
+
+  check:all:
+    desc: check plus the lesson compile gate — what CI runs end to end
+    cmds:
+      - task: check
+      - task: lessons:check
+
+  check:
+    desc: The fast gate — formatting, vet, tests. Lesson compiles are in check:all.
+    cmds:
+      - bash scripts/check-no-build-artifacts.sh
+      - GOFLAGS=-mod=mod go tool templ generate
+      - task: assets
+      - bash scripts/check-gofumpt.sh
+      - task: vet
+      - go test ./... -count=1
+      - go build ./...

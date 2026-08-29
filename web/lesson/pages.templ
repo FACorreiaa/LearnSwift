@@ -1,0 +1,131 @@
+package lesson
+
+import (
+	"fmt"
+	"github.com/FACorreiaa/seshat/internal/lessons/lesson"
+	"github.com/FACorreiaa/seshat/internal/progress"
+	"github.com/FACorreiaa/seshat/web/shared/layout"
+)
+
+// View is everything the lesson pages need, assembled by the handler. Templates
+// receive a prepared value rather than services to call, so rendering cannot
+// issue a query — and a page cannot become slow by accident.
+type View struct {
+	Tracks   []lesson.Track
+	Progress map[string]progress.LessonProgress
+
+	Lesson    lesson.Lesson
+	Next      lesson.Lesson
+	HasNext   bool
+	Completed bool
+
+	// Result is the outcome of the most recent submission, zero before any.
+	Result Result
+}
+
+func (v View) IsCompleted(slug string) bool {
+	p, ok := v.Progress[slug]
+	return ok && p.IsCompleted()
+}
+
+func (v View) CompletedCount(track lesson.Track) int {
+	n := 0
+	for _, l := range track.Lessons {
+		if v.IsCompleted(l.Slug) {
+			n++
+		}
+	}
+	return n
+}
+
+templ IndexPage(v View) {
+	@layout.Public("Lessons — Seshat") {
+		<div class="mx-auto max-w-3xl px-6 py-12">
+			<h1 class="mb-8 text-3xl font-bold tracking-tight">Lessons</h1>
+			for _, track := range v.Tracks {
+				<section class="mb-10">
+					<div class="mb-3 flex items-baseline justify-between">
+						<h2 class="text-xl font-semibold">{ track.Title }</h2>
+						<span class="text-muted-foreground text-sm">
+							{ fmt.Sprintf("%d / %d", v.CompletedCount(track), len(track.Lessons)) }
+						</span>
+					</div>
+					<ul class="divide-border/60 divide-y rounded-lg border">
+						for _, l := range track.Lessons {
+							@lessonRow(l, v.IsCompleted(l.Slug))
+						}
+					</ul>
+				</section>
+			}
+		</div>
+	}
+}
+
+templ lessonRow(l lesson.Lesson, done bool) {
+	<li>
+		<a href={ templ.SafeURL("/lessons/" + l.Slug) } class="hover:bg-muted/50 flex items-center gap-3 px-4 py-3">
+			@completionMark(done)
+			<span class="min-w-0 flex-1">
+				<span class="block font-medium">{ l.Title }</span>
+				<span class="text-muted-foreground block truncate text-sm">{ l.Summary }</span>
+			</span>
+			<span class="text-muted-foreground shrink-0 text-sm">{ fmt.Sprintf("%d min", l.Minutes) }</span>
+		</a>
+	</li>
+}
+
+// completionMark is an icon plus a text label for assistive technology. A tick
+// that exists only as a shape says nothing to a screen reader.
+templ completionMark(done bool) {
+	if done {
+		<span class="text-primary shrink-0" title="Completed">
+			<svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+				<path d="M20 6 9 17l-5-5"></path>
+			</svg>
+			<span class="sr-only">Completed</span>
+		</span>
+	} else {
+		<span class="border-muted-foreground/40 size-5 shrink-0 rounded-full border" aria-hidden="true"></span>
+	}
+}
+
+templ Page(v View) {
+	@layout.Public(v.Lesson.Title + " — Seshat") {
+		<article class="mx-auto max-w-3xl px-6 py-12">
+			<a href="/lessons" class="text-muted-foreground hover:text-foreground mb-6 inline-block text-sm">← All lessons</a>
+			<header class="mb-8">
+				<p class="text-muted-foreground text-sm">{ fmt.Sprintf("%d min read", v.Lesson.Minutes) }</p>
+				<h1 class="text-4xl font-bold tracking-tight text-balance">{ v.Lesson.Title }</h1>
+			</header>
+			// The body is rendered from markdown committed to this repository,
+			// never from anything a visitor supplied, so it is trusted markup
+			// by construction. That is the only reason it is written raw.
+			<div class="prose-seshat">
+				@templ.Raw(v.Lesson.BodyHTML)
+			</div>
+			@exercise(v)
+			@Footer(v)
+		</article>
+	}
+}
+
+
+templ Footer(v View) {
+	<div class="mt-10 flex items-center justify-between gap-4 border-t pt-6">
+		if v.Completed {
+			<p class="text-muted-foreground text-sm">Completed.</p>
+		} else {
+			<form method="post" action={ templ.SafeURL("/lessons/" + v.Lesson.Slug + "/complete") } hx-post={ "/lessons/" + v.Lesson.Slug + "/complete" } hx-target="closest div" hx-swap="outerHTML">
+				@layout.CSRFInput()
+				<button type="submit" class="bg-primary text-primary-foreground hover:bg-primary/90 h-10 rounded-md px-4 text-sm font-medium">
+					Mark complete
+				</button>
+			</form>
+		}
+		if v.HasNext {
+			<a href={ templ.SafeURL("/lessons/" + v.Next.Slug) } class="text-primary text-sm underline underline-offset-4">
+				Next: { v.Next.Title } →
+			</a>
+		}
+	</div>
+}
