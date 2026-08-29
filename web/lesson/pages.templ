@@ -21,6 +21,41 @@ type View struct {
 
 	// Result is the outcome of the most recent submission, zero before any.
 	Result Result
+
+	// Continue is the lesson a returning learner should be dropped back into:
+	// the first one, in track order, they have not finished. HasContinue is
+	// false only when every lesson is done.
+	Continue    lesson.Lesson
+	HasContinue bool
+}
+
+// TotalCompleted and TotalLessons drive the one line on the home page that says
+// how far through the whole thing a learner is.
+func (v View) TotalCompleted() int {
+	n := 0
+	for _, t := range v.Tracks {
+		n += v.CompletedCount(t)
+	}
+	return n
+}
+
+func (v View) TotalLessons() int {
+	n := 0
+	for _, t := range v.Tracks {
+		n += len(t.Lessons)
+	}
+	return n
+}
+
+// PercentComplete is rounded down, so a track is never shown as finished until
+// it is. Reporting 100% on nineteen of twenty lessons is a small lie that
+// undermines every other number on the page.
+func (v View) PercentComplete(track lesson.Track) int {
+	total := len(track.Lessons)
+	if total == 0 {
+		return 0
+	}
+	return v.CompletedCount(track) * 100 / total
 }
 
 func (v View) IsCompleted(slug string) bool {
@@ -39,7 +74,11 @@ func (v View) CompletedCount(track lesson.Track) int {
 }
 
 templ IndexPage(v View) {
-	@layout.Public("Lessons — Seshat") {
+	@layout.Public(layout.Meta{
+		Title:       "Swift lessons — Seshat",
+		Description: "Every Swift and SwiftUI lesson, grouped by track. Each one is a concept, an exercise, and a verdict.",
+		Path:        "/lessons",
+	}) {
 		<div class="mx-auto max-w-3xl px-6 py-12">
 			<h1 class="mb-8 text-3xl font-bold tracking-tight">Lessons</h1>
 			for _, track := range v.Tracks {
@@ -90,7 +129,14 @@ templ completionMark(done bool) {
 }
 
 templ Page(v View) {
-	@layout.Public(v.Lesson.Title + " — Seshat") {
+	// Summary is the lesson's own one-line description, written in its
+	// frontmatter for exactly this. Passing it through is what gives every
+	// lesson a distinct search result and a distinct preview card.
+	@layout.Public(layout.Meta{
+		Title:       v.Lesson.Title + " — Seshat",
+		Description: v.Lesson.Summary,
+		Path:        "/lessons/" + v.Lesson.Slug,
+	}) {
 		<article class="mx-auto max-w-3xl px-6 py-12">
 			<a href="/lessons" class="text-muted-foreground hover:text-foreground mb-6 inline-block text-sm">← All lessons</a>
 			<header class="mb-8">

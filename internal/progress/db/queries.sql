@@ -39,3 +39,20 @@ SELECT * FROM exercise_attempt
 WHERE user_id = $1 AND lesson_slug = $2
 ORDER BY created_at DESC
 LIMIT $3;
+
+-- name: CountFailedAttempts :one
+-- Drives when a hint and then the solution are offered. Counted rather than
+-- listed because the handler needs the number and nothing else, and the code
+-- column on these rows is the largest thing in the table.
+SELECT count(*) FROM exercise_attempt
+WHERE user_id = $1 AND lesson_slug = $2 AND passed = false;
+
+-- name: MarkSolutionRevealed :exec
+-- An upsert rather than an update: a learner reaches this having submitted, and
+-- a submission does not require ever having opened the lesson page that creates
+-- the row. COALESCE keeps the first reveal, because "when did they give up on
+-- this" is asked of the first time, not the most recent.
+INSERT INTO user_lesson (user_id, lesson_slug, status, solution_revealed_at)
+VALUES ($1, $2, 'in_progress', now())
+ON CONFLICT (user_id, lesson_slug) DO UPDATE
+SET solution_revealed_at = COALESCE(user_lesson.solution_revealed_at, now());

@@ -17,6 +17,10 @@ starter: |
   }
 
   await run()
+hint: >-
+  `async let` starts the work immediately and hands you a promise of the
+  result. Start both bindings first, then await them where the values are
+  used — awaiting each one as you declare it makes them sequential again.
 solution: |
   func fetchGreeting() async -> String { "Hello" }
   func fetchName() async -> String { "World" }

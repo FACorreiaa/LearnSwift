@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -26,11 +28,13 @@ import (
 	"github.com/FACorreiaa/seshat/internal/executor"
 	"github.com/FACorreiaa/seshat/internal/lessons"
 	"github.com/FACorreiaa/seshat/internal/progress"
+	"github.com/FACorreiaa/seshat/internal/shared/analytics"
 	"github.com/FACorreiaa/seshat/internal/shared/database"
 	"github.com/FACorreiaa/seshat/internal/shared/middleware"
 	"github.com/FACorreiaa/seshat/internal/validate"
 	"github.com/FACorreiaa/seshat/web/assets"
 	"github.com/FACorreiaa/seshat/web/landing"
+	"github.com/FACorreiaa/seshat/web/shared/layout"
 )
 
 func main() {
@@ -51,6 +55,11 @@ func dispatch() error {
 	}
 
 	slog.SetDefault(newLogger(cfg))
+
+	// Canonical links, og:url and the sitemap all need the origin the app is
+	// reached at, and none of them can be built from a request: a canonical URL
+	// derived from the Host header is a canonical URL an attacker can set.
+	layout.SetBaseURL(cfg.BaseURL)
 
 	// A subcommand rather than a second binary, so the image cannot apply a
 	// schema built from a different commit than the application serving it.
@@ -98,6 +107,13 @@ func run(cfg config.Config) error {
 
 	svc := newServices(pool, cfg)
 	defer func() { _ = svc.executor.Close(context.Background()) }()
+	// Flushing queued events is bounded: a hung analytics endpoint must not be
+	// able to hold up the process's shutdown.
+	defer func() {
+		flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = svc.analytics.Close(flushCtx)
+	}()
 
 	if !svc.executor.Available() {
 		// A warning, not a refusal to start. Lessons still read, and static
@@ -160,6 +176,7 @@ type services struct {
 	progress  *progress.Service
 	validator *validate.Validator
 	executor  *executor.Executor
+	analytics analytics.Client
 }
 
 func newServices(pool *pgxpool.Pool, cfg config.Config) *services {
@@ -168,7 +185,9 @@ func newServices(pool *pgxpool.Pool, cfg config.Config) *services {
 		executor: executor.New(
 			compiler.New(cfg.ContainerRuntime, cfg.CompilerImage),
 			executor.NewMemoryCache(cfg.ModuleCacheBytes),
+			cfg.MaxConcurrentCompiles,
 		),
+		analytics: analytics.New(cfg.PostHogAPIKey, cfg.PostHogHost, slog.Default()),
 	}
 	if pool != nil {
 		svc.auth = auth.NewService(pool)
@@ -198,8 +217,8 @@ func routes(cfg config.Config, pool *pgxpool.Pool, index *lessons.Index, svc *se
 	)
 	if pool != nil {
 		authMW = auth.NewMiddleware(svc.auth.Sessions(), cfg.IsProduction())
-		authHandler = auth.NewHandler(svc.auth, authMW)
-		lessonHandler = lessons.NewHandler(index, svc.progress, svc.validator, svc.executor)
+		authHandler = auth.NewHandler(svc.auth, authMW, svc.analytics)
+		lessonHandler = lessons.NewHandler(index, svc.progress, svc.validator, svc.executor, svc.analytics, cfg.IsProduction())
 	}
 
 	// The browser group. Non-browser callers — the MCP endpoint and the compile
@@ -215,16 +234,104 @@ func routes(cfg config.Config, pool *pgxpool.Pool, index *lessons.Index, svc *se
 		}
 
 		mountAssets(r, cfg)
+		mountCrawlerRoutes(r, index)
 
-		r.Handle("GET /", templ.Handler(landing.Page()))
-
-		if authHandler != nil {
+		if lessonHandler != nil {
+			// The lesson handler owns "/" too: the root renders a dashboard for
+			// someone signed in and the marketing page for everyone else, and
+			// deciding that needs the progress service.
 			authHandler.Routes(r)
 			lessonHandler.Routes(r)
+		} else {
+			// nil pool is the routing tests. Nobody can be signed in, so the
+			// root is unconditionally the marketing page.
+			r.Handle("GET /", templ.Handler(landing.Page(landingView(index))))
 		}
 	})
 
 	return r
+}
+
+// mountCrawlerRoutes serves the two files a search engine looks for.
+//
+// Both are built from the in-memory lesson index rather than from a file on
+// disk, so a lesson added to content/lessons is in the sitemap the moment it is
+// deployed — a sitemap maintained by hand is a sitemap that goes stale, and a
+// stale one is worse than none.
+func mountCrawlerRoutes(r chi.Router, index *lessons.Index) {
+	r.Get("/robots.txt", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+		body := "User-agent: *\nAllow: /\n\n" +
+			// Nothing here is secret; these are simply not pages worth indexing,
+			// and a crawler spending its budget on them is budget not spent on
+			// lessons.
+			"Disallow: /login\nDisallow: /register\n"
+		if base := layout.BaseURL(); base != "" {
+			body += "\nSitemap: " + base + "/sitemap.xml\n"
+		}
+		_, _ = io.WriteString(w, body)
+	})
+
+	r.Get("/sitemap.xml", func(w http.ResponseWriter, req *http.Request) {
+		base := layout.BaseURL()
+		if index == nil || base == "" {
+			// Without an index there is nothing to list, and without an origin
+			// every URL would be a guess. A sitemap full of wrong URLs is
+			// actively harmful, so the honest answer is to serve none.
+			http.Error(w, "sitemap unavailable", http.StatusNotFound)
+			return
+		}
+
+		type url struct {
+			Loc      string `xml:"loc"`
+			Priority string `xml:"priority,omitempty"`
+		}
+		doc := struct {
+			XMLName xml.Name `xml:"urlset"`
+			NS      string   `xml:"xmlns,attr"`
+			URLs    []url    `xml:"url"`
+		}{NS: "http://www.sitemaps.org/schemas/sitemap/0.9"}
+
+		doc.URLs = append(doc.URLs,
+			url{Loc: base + "/", Priority: "1.0"},
+			url{Loc: base + "/lessons", Priority: "0.9"},
+		)
+		for _, l := range index.All() {
+			doc.URLs = append(doc.URLs, url{Loc: base + "/lessons/" + l.Slug, Priority: "0.8"})
+		}
+
+		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+		_, _ = io.WriteString(w, xml.Header)
+		if err := xml.NewEncoder(w).Encode(doc); err != nil {
+			middleware.FromContext(req.Context()).Error("could not write sitemap", slog.Any("error", err))
+		}
+	})
+}
+
+// landingView picks the exercise the landing page runs.
+//
+// The page's claim is that Swift runs in the browser with no account and no
+// Xcode, and the only convincing way to make that claim is to let a visitor do
+// it before reading a word of prose. The lesson is chosen by slug rather than by
+// position so reordering the curriculum cannot silently change the front page.
+func landingView(index *lessons.Index) landing.View {
+	const featured = "variables"
+
+	// nil index is the routing tests, per the same convention as the nil pool
+	// above. The page still renders; it simply makes its argument in prose.
+	if index == nil {
+		return landing.View{}
+	}
+
+	l, ok := index.Get(featured)
+	if !ok {
+		// Not fatal: the page still makes its argument in prose. A missing
+		// featured lesson is worth a log line rather than a failed boot.
+		slog.Warn("landing exercise unavailable", slog.String("slug", featured))
+		return landing.View{}
+	}
+	return landing.View{Lesson: l, HasLesson: true, Tracks: index.Tracks()}
 }
 
 func mountAssets(r chi.Router, cfg config.Config) {

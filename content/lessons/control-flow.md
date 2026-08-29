@@ -16,6 +16,10 @@ starter: |
   } else {
       print("C")
   }
+hint: >-
+  A `switch` over an integer has to cover every possible value. Ranges do
+  most of the work — `90...` and `70..<90` — and `default` catches whatever
+  is left.
 solution: |
   let score = 72
 

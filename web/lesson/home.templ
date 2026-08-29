@@ -1,0 +1,143 @@
+package lesson
+
+import (
+	"fmt"
+	"github.com/FACorreiaa/seshat/internal/lessons/lesson"
+	"github.com/FACorreiaa/seshat/web/shared/layout"
+	"github.com/FACorreiaa/seshat/web/shared/ui/button"
+	"github.com/FACorreiaa/seshat/web/shared/ui/icon"
+)
+
+// HomePage is what a signed-in learner lands on instead of the marketing page.
+//
+// It is one button and some bars, and the button is the point. A returning
+// learner arriving on a page that explains what Seshat is has been asked to
+// remember where they stopped — which is the app's job, not theirs.
+templ HomePage(v View) {
+	@layout.Public(layout.Meta{
+		Title: "Your progress — Seshat",
+		// No description and no canonical: this page is different for every
+		// visitor and belongs in no search result.
+		Description: "Pick up where you left off.",
+	}) {
+		<div class="mx-auto max-w-3xl px-6 py-16">
+			if v.HasContinue {
+				@continueCard(v)
+			} else {
+				@allDoneCard(v)
+			}
+			@trackProgress(v)
+		</div>
+	}
+}
+
+templ continueCard(v View) {
+	<section class="space-y-5">
+		<p class="text-muted-foreground text-sm">
+			{ fmt.Sprintf("%d of %d lessons done", v.TotalCompleted(), v.TotalLessons()) }
+		</p>
+		<h1 class="text-3xl font-bold tracking-tight text-balance sm:text-4xl">
+			{ v.Continue.Title }
+		</h1>
+		if v.Continue.Summary != "" {
+			<p class="text-muted-foreground max-w-xl text-pretty">{ v.Continue.Summary }</p>
+		}
+		<div class="flex flex-wrap items-center gap-3">
+			@button.Button(button.Props{Variant: button.VariantDefault, Href: "/lessons/" + v.Continue.Slug}) {
+				@icon.ArrowRight(icon.Props{Class: "size-4"})
+				{ continueLabel(v) }
+			}
+			<span class="text-muted-foreground text-sm">
+				{ fmt.Sprintf("%d min", v.Continue.Minutes) }
+			</span>
+		</div>
+	</section>
+}
+
+// continueLabel says "Continue" only when there is something to continue. A
+// learner opening their very first lesson has not left anything to come back to,
+// and being greeted as though they had is the kind of small wrongness that makes
+// software feel like it is not paying attention.
+func continueLabel(v View) string {
+	if v.TotalCompleted() == 0 {
+		return "Start the first lesson"
+	}
+	return "Continue"
+}
+
+templ allDoneCard(v View) {
+	<section class="space-y-4">
+		<h1 class="text-3xl font-bold tracking-tight sm:text-4xl">That is all of them.</h1>
+		<p class="text-muted-foreground max-w-xl text-pretty">
+			{ fmt.Sprintf("All %d lessons, finished.", v.TotalLessons()) }
+			&nbsp;More are being written. In the meantime, the exercises are worth a
+			second pass without the prose — knowing an answer and being able to write
+			it are different things.
+		</p>
+		@button.Button(button.Props{Variant: button.VariantOutline, Href: "/lessons"}) {
+			@icon.Map(icon.Props{Class: "size-4"})
+			Browse the lessons
+		}
+	</section>
+}
+
+templ trackProgress(v View) {
+	<section class="mt-14 space-y-4">
+		<h2 class="text-sm font-medium tracking-wide uppercase">Tracks</h2>
+		<ul class="space-y-4">
+			for _, t := range v.Tracks {
+				<li>
+					<a href="/lessons" class="group block space-y-2">
+						<div class="flex items-baseline justify-between gap-4">
+							<span class="group-hover:text-primary font-medium transition-colors">{ t.Title }</span>
+							<span class="text-muted-foreground shrink-0 text-sm">
+								{ fmt.Sprintf("%d / %d", v.CompletedCount(t), len(t.Lessons)) }
+							</span>
+						</div>
+						// A meter rather than a bare div: the number is announced to a
+						// screen reader instead of being carried only by a width.
+						<div
+							class="bg-muted h-1.5 w-full overflow-hidden rounded-full"
+							role="meter"
+							aria-valuenow={ fmt.Sprintf("%d", v.CompletedCount(t)) }
+							aria-valuemin="0"
+							aria-valuemax={ fmt.Sprintf("%d", len(t.Lessons)) }
+							aria-label={ t.Title + " progress" }
+						>
+							<div class="bg-primary h-full rounded-full" style={ barWidth(v.PercentComplete(t)) }></div>
+						</div>
+					</a>
+				</li>
+			}
+		</ul>
+	</section>
+}
+
+// barWidth is a templ.SafeCSS because the value is computed here from an integer
+// percentage, never from anything a visitor supplied.
+func barWidth(percent int) templ.SafeCSS {
+	return templ.SafeCSS(fmt.Sprintf("width: %d%%", percent))
+}
+
+// firstIncomplete picks the lesson to continue from: the first, in the order the
+// tracks are taught, that has not been finished.
+//
+// Ordered rather than "most recently started", because the curriculum has an
+// order and skipping ahead is not what a learner returning after a week wants.
+func firstIncomplete(v View) (lesson.Lesson, bool) {
+	for _, t := range v.Tracks {
+		for _, l := range t.Lessons {
+			if !v.IsCompleted(l.Slug) {
+				return l, true
+			}
+		}
+	}
+	return lesson.Lesson{}, false
+}
+
+// WithContinue fills in the lesson to resume. Exported so the handler can build
+// the view without duplicating the ordering rule the page depends on.
+func WithContinue(v View) View {
+	v.Continue, v.HasContinue = firstIncomplete(v)
+	return v
+}

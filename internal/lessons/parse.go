@@ -36,6 +36,7 @@ type frontmatter struct {
 	Summary    string            `yaml:"summary"`
 	Runtime    lesson.Runtime    `yaml:"runtime"`
 	Starter    string            `yaml:"starter"`
+	Hint       string            `yaml:"hint"`
 	Solution   string            `yaml:"solution"`
 	Assertions lesson.Assertions `yaml:"assertions"`
 }
@@ -214,6 +215,7 @@ func parseOne(md goldmark.Markdown, slug string, raw []byte) (lesson.Lesson, err
 		Runtime:    fm.Runtime,
 		BodyHTML:   html.String(),
 		Starter:    fm.Starter,
+		Hint:       fm.Hint,
 		Solution:   fm.Solution,
 		Assertions: fm.Assertions,
 	}, nil

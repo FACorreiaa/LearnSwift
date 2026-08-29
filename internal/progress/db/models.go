@@ -21,9 +21,10 @@ type ExerciseAttempt struct {
 }
 
 type UserLesson struct {
-	UserID      uuid.UUID
-	LessonSlug  string
-	Status      string
-	StartedAt   time.Time
-	CompletedAt pgtype.Timestamptz
+	UserID             uuid.UUID
+	LessonSlug         string
+	Status             string
+	StartedAt          time.Time
+	CompletedAt        pgtype.Timestamptz
+	SolutionRevealedAt pgtype.Timestamptz
 }

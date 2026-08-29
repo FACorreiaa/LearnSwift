@@ -13,6 +13,9 @@ starter: |
   }
 
   print(greet(name: "World"))
+hint: >-
+  The label a caller writes and the name the body uses do not have to be the
+  same word. Two names, separated by a space, in that order.
 solution: |
   func greet(to name: String) -> String {
       "Hello, \(name)!"

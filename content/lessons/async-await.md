@@ -12,6 +12,9 @@ starter: |
   }
 
   // Call fetchName and print "Hello, World!"
+hint: >-
+  Mark the function `async`, and then every call to it has to say `await`.
+  That keyword is the whole point: it marks where the function can suspend.
 solution: |
   func fetchName() async -> String {
       return "World"

@@ -12,6 +12,10 @@ starter: |
   // Make `total` a Double so the division below is not integer division.
   let total = 7
   print(total / 2)
+hint: >-
+  The literal `7` is an integer, and integer division throws away the
+  remainder. Give the constant the type you actually want before the
+  division happens.
 solution: |
   let count = 42
   let pi = 3.14

@@ -6,10 +6,33 @@ import (
 	"context"
 	"crypto/rand"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/netip"
 	"runtime/debug"
 	"time"
 )
+
+// ClientIP is the address a rate limiter counts against.
+//
+// It reads RemoteAddr and nothing else. X-Forwarded-For is deliberately ignored:
+// it is attacker-controlled unless a proxy is known to be rewriting it, and a
+// limiter keyed on a header anyone can set is not a limiter. Behind a proxy this
+// wants replacing with a trusted-hop implementation, not with blind trust.
+//
+// The zero Addr is returned for anything unparseable, which is a usable key —
+// every such caller shares one bucket, which is the conservative direction.
+func ClientIP(r *http.Request) netip.Addr {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		return netip.Addr{}
+	}
+	return addr
+}
 
 type ctxKey int
 

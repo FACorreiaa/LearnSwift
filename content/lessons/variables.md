@@ -16,6 +16,10 @@ starter: |
   }
 
   report()
+hint: >-
+  Only one of the two names ever changes after it is set. The other is
+  written once and then only read — say so, and the compiler will hold you
+  to it.
 solution: |
   func report() {
       var total = 10

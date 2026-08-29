@@ -72,7 +72,7 @@ func TestALessonNeedingOutputIsNeverReportedAsPassedYet(t *testing.T) {
 		MustNotUse:     []string{"!"},
 		OutputContains: []string{"Hello, World!"},
 	})
-	h := NewHandler(index, nil, fakeValidator{result: validate.Result{OK: true}}, nil)
+	h := NewHandler(index, nil, fakeValidator{result: validate.Result{OK: true}}, nil, nil, false)
 
 	rec := checkRequest(t, h, "x", "let x = 1")
 
@@ -90,7 +90,7 @@ func TestALessonNeedingOutputIsNeverReportedAsPassedYet(t *testing.T) {
 
 func TestALessonWithOnlyStaticAssertionsCanActuallyPass(t *testing.T) {
 	index := testIndex(t, lesson.Assertions{MustDeclare: []string{"@State"}})
-	h := NewHandler(index, nil, fakeValidator{result: validate.Result{OK: true}}, nil)
+	h := NewHandler(index, nil, fakeValidator{result: validate.Result{OK: true}}, nil, nil, false)
 
 	rec := checkRequest(t, h, "x", "@State private var count = 0")
 
@@ -107,7 +107,7 @@ func TestAFailedCheckIs422SoHtmxSwapsIt(t *testing.T) {
 	h := NewHandler(index, nil, fakeValidator{result: validate.Result{
 		OK:       false,
 		Failures: []validate.Failure{{Kind: "must_declare", Token: "@State", Message: "Your code needs to use @State."}},
-	}}, nil)
+	}}, nil, nil, false)
 
 	rec := checkRequest(t, h, "x", "var count = 0")
 
@@ -125,7 +125,7 @@ func TestAFailedCheckIs422SoHtmxSwapsIt(t *testing.T) {
 // failure would tell a learner their correct code is wrong.
 func TestAnUnavailableGraderIsNotReportedAsAWrongAnswer(t *testing.T) {
 	index := testIndex(t, lesson.Assertions{MustDeclare: []string{"@State"}})
-	h := NewHandler(index, nil, fakeValidator{err: errors.New("boom")}, nil)
+	h := NewHandler(index, nil, fakeValidator{err: errors.New("boom")}, nil, nil, false)
 
 	rec := checkRequest(t, h, "x", "whatever")
 
@@ -143,7 +143,7 @@ func TestAnUnavailableGraderIsNotReportedAsAWrongAnswer(t *testing.T) {
 
 func TestALessonWithNothingCheckableRefusesTheEndpoint(t *testing.T) {
 	index := testIndex(t, lesson.Assertions{OutputContains: []string{"x"}})
-	h := NewHandler(index, nil, fakeValidator{result: validate.Result{OK: true}}, nil)
+	h := NewHandler(index, nil, fakeValidator{result: validate.Result{OK: true}}, nil, nil, false)
 
 	rec := checkRequest(t, h, "x", "let x = 1")
 
@@ -154,7 +154,7 @@ func TestALessonWithNothingCheckableRefusesTheEndpoint(t *testing.T) {
 
 func TestCheckingAnUnknownLessonIs404(t *testing.T) {
 	h := NewHandler(testIndex(t, lesson.Assertions{MustDeclare: []string{"x"}}), nil,
-		fakeValidator{result: validate.Result{OK: true}}, nil)
+		fakeValidator{result: validate.Result{OK: true}}, nil, nil, false)
 
 	if rec := checkRequest(t, h, "nope", "code"); rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", rec.Code)
@@ -163,7 +163,7 @@ func TestCheckingAnUnknownLessonIs404(t *testing.T) {
 
 func TestAnOversizedSubmissionIsRefused(t *testing.T) {
 	index := testIndex(t, lesson.Assertions{MustDeclare: []string{"x"}})
-	h := NewHandler(index, nil, fakeValidator{result: validate.Result{OK: true}}, nil)
+	h := NewHandler(index, nil, fakeValidator{result: validate.Result{OK: true}}, nil, nil, false)
 
 	rec := checkRequest(t, h, "x", strings.Repeat("a", maxSubmissionBytes+1))
 
@@ -180,7 +180,7 @@ func TestStaticCheckingWorksForALessonThatCannotBeExecuted(t *testing.T) {
 	l.Runtime = lesson.RuntimeNone
 	index.bySlug["x"] = l
 
-	h := NewHandler(index, nil, fakeValidator{result: validate.Result{OK: true}}, nil)
+	h := NewHandler(index, nil, fakeValidator{result: validate.Result{OK: true}}, nil, nil, false)
 
 	if rec := checkRequest(t, h, "x", "@State var c = 0"); rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200 — a non-executable lesson can still be read", rec.Code)
@@ -202,6 +202,11 @@ func (f fakeExecutor) Run(context.Context, string, lesson.Runtime) (executor.Res
 	return f.result, f.err
 }
 
+// Cached always reports false: these tests are about what the handler decides,
+// and a fake that claimed a cache hit would quietly exempt every submission
+// from the quota the rate-limit tests are checking.
+func (f fakeExecutor) Cached(string, lesson.Runtime) bool { return false }
+
 func outputLesson(t *testing.T) *Index {
 	t.Helper()
 	return testIndex(t, lesson.Assertions{
@@ -215,7 +220,7 @@ func outputLesson(t *testing.T) *Index {
 func TestALessonNeedingOutputPassesWhenTheOutputIsRight(t *testing.T) {
 	h := NewHandler(outputLesson(t), nil,
 		fakeValidator{result: validate.Result{OK: true}},
-		fakeExecutor{result: executor.Result{Compiled: true, Stdout: "Hello, World!\n"}})
+		fakeExecutor{result: executor.Result{Compiled: true, Stdout: "Hello, World!\n"}}, nil, false)
 
 	rec := checkRequest(t, h, "x", `print("Hello, World!")`)
 
@@ -230,7 +235,7 @@ func TestALessonNeedingOutputPassesWhenTheOutputIsRight(t *testing.T) {
 func TestWrongOutputFailsAndShowsBothSides(t *testing.T) {
 	h := NewHandler(outputLesson(t), nil,
 		fakeValidator{result: validate.Result{OK: true}},
-		fakeExecutor{result: executor.Result{Compiled: true, Stdout: "Goodbye\n"}})
+		fakeExecutor{result: executor.Result{Compiled: true, Stdout: "Goodbye\n"}}, nil, false)
 
 	rec := checkRequest(t, h, "x", `print("Goodbye")`)
 
@@ -248,7 +253,7 @@ func TestWrongOutputFailsAndShowsBothSides(t *testing.T) {
 func TestANonZeroExitFailsEvenWhenTheOutputMatches(t *testing.T) {
 	h := NewHandler(outputLesson(t), nil,
 		fakeValidator{result: validate.Result{OK: true}},
-		fakeExecutor{result: executor.Result{Compiled: true, Stdout: "Hello, World!\n", ExitCode: 1}})
+		fakeExecutor{result: executor.Result{Compiled: true, Stdout: "Hello, World!\n", ExitCode: 1}}, nil, false)
 
 	rec := checkRequest(t, h, "x", "code")
 
@@ -260,7 +265,7 @@ func TestANonZeroExitFailsEvenWhenTheOutputMatches(t *testing.T) {
 func TestCodeThatDoesNotCompileShowsTheCompilerOutput(t *testing.T) {
 	h := NewHandler(outputLesson(t), nil,
 		fakeValidator{result: validate.Result{OK: true}},
-		fakeExecutor{result: executor.Result{Compiled: false, Diagnostics: "main.swift:1:1: error: cannot find 'nope'"}})
+		fakeExecutor{result: executor.Result{Compiled: false, Diagnostics: "main.swift:1:1: error: cannot find 'nope'"}}, nil, false)
 
 	rec := checkRequest(t, h, "x", "nope")
 
@@ -275,7 +280,7 @@ func TestCodeThatDoesNotCompileShowsTheCompilerOutput(t *testing.T) {
 func TestARunawayProgramIsReportedAsSuch(t *testing.T) {
 	h := NewHandler(outputLesson(t), nil,
 		fakeValidator{result: validate.Result{OK: true}},
-		fakeExecutor{result: executor.Result{Compiled: true, TimedOut: true}})
+		fakeExecutor{result: executor.Result{Compiled: true, TimedOut: true}}, nil, false)
 
 	rec := checkRequest(t, h, "x", "while true { }")
 
@@ -297,7 +302,7 @@ func TestAStaticFailureSkipsCompilingEntirely(t *testing.T) {
 			OK:       false,
 			Failures: []validate.Failure{{Kind: "must_not_use", Token: "!", Message: "This exercise asks you not to use !."}},
 		}},
-		trackingExecutor{ran: &ran})
+		trackingExecutor{ran: &ran}, nil, false)
 
 	rec := checkRequest(t, h, "x", "print(x!)")
 
@@ -318,10 +323,12 @@ func (t trackingExecutor) Run(context.Context, string, lesson.Runtime) (executor
 	return executor.Result{Compiled: true, Stdout: "Hello, World!"}, nil
 }
 
+func (t trackingExecutor) Cached(string, lesson.Runtime) bool { return false }
+
 // With no executor configured, a lesson needing output cannot be settled — and
 // must not be reported as passed.
 func TestWithoutAnExecutorAnOutputLessonStaysPending(t *testing.T) {
-	h := NewHandler(outputLesson(t), nil, fakeValidator{result: validate.Result{OK: true}}, nil)
+	h := NewHandler(outputLesson(t), nil, fakeValidator{result: validate.Result{OK: true}}, nil, nil, false)
 
 	rec := checkRequest(t, h, "x", "code")
 

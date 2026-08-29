@@ -13,6 +13,9 @@ starter: |
   // Define a `Named` protocol requiring a `name`, and conform Dog to it.
   let dog = Dog(name: "Rex")
   print(dog.name)
+hint: >-
+  The protocol says what a conforming type must have; the struct says it has
+  it. A stored `let` satisfies a `{ get }` requirement on its own.
 solution: |
   protocol Named {
       var name: String { get }

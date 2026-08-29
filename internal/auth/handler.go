@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/netip"
 	"strconv"
@@ -13,6 +12,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/FACorreiaa/seshat/internal/shared/analytics"
 	apperr "github.com/FACorreiaa/seshat/internal/shared/errors"
 	"github.com/FACorreiaa/seshat/internal/shared/htmx"
 	"github.com/FACorreiaa/seshat/internal/shared/middleware"
@@ -34,8 +34,9 @@ const (
 )
 
 type Handler struct {
-	svc *Service
-	mw  *Middleware
+	svc       *Service
+	mw        *Middleware
+	analytics analytics.Client
 
 	logins    *ratelimit.Limiter
 	registers *ratelimit.Limiter
@@ -45,10 +46,14 @@ type Handler struct {
 	authOverride authFunc
 }
 
-func NewHandler(svc *Service, mw *Middleware) *Handler {
+func NewHandler(svc *Service, mw *Middleware, an analytics.Client) *Handler {
+	if an == nil {
+		an = analytics.Nop()
+	}
 	return &Handler{
 		svc:       svc,
 		mw:        mw,
+		analytics: an,
 		logins:    ratelimit.New(loginAttemptLimit, loginAttemptWindow),
 		registers: ratelimit.New(registerAttemptLimit, registerAttemptWindow),
 	}
@@ -81,11 +86,24 @@ func (h *Handler) showRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
-	h.submit(w, r, h.loginFunc(), h.logins, authpages.LoginForm, authpages.LoginPage)
+	// No event for a sign-in. The funnel this measures is about people arriving
+	// and learning something, and a returning visitor's sign-in adds nothing to
+	// it that `lesson_viewed` does not already say.
+	h.submit(w, r, h.loginFunc(), h.logins, authpages.LoginForm, authpages.LoginPage, nil)
 }
 
 func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
-	h.submit(w, r, h.registerFunc(), h.registers, authpages.RegisterForm, authpages.RegisterPage)
+	h.submit(w, r, h.registerFunc(), h.registers, authpages.RegisterForm, authpages.RegisterPage, h.captureSignUp)
+}
+
+// captureSignUp records that an account was created. Deliberately carries no
+// email address: what matters is that someone decided a guest session was worth
+// keeping, not who they are.
+func (h *Handler) captureSignUp(r *http.Request, user User) {
+	h.analytics.Capture(analytics.Event{
+		Name:       analytics.EventSignedUp,
+		DistinctID: analytics.DistinctID(user.ID.String(), middleware.ClientIP(r), r.UserAgent()),
+	})
 }
 
 // loginFunc and registerFunc exist so a test can drive the handler without a
@@ -128,7 +146,14 @@ type formRenderer func(authpages.Form) templ.Component
 // which service call they make and which template they re-render. The handling
 // of a failure — status code, fragment versus page, what is echoed back — is
 // identical, and is the part worth having in one place.
-func (h *Handler) submit(w http.ResponseWriter, r *http.Request, auth authFunc, limiter *ratelimit.Limiter, fragment, page formRenderer) {
+func (h *Handler) submit(
+	w http.ResponseWriter,
+	r *http.Request,
+	auth authFunc,
+	limiter *ratelimit.Limiter,
+	fragment, page formRenderer,
+	onSuccess func(*http.Request, User),
+) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "malformed form", http.StatusBadRequest)
 		return
@@ -186,7 +211,7 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request, auth authFunc, 
 		return
 	}
 
-	_, token, err := auth(r.Context(), creds)
+	user, token, err := auth(r.Context(), creds)
 	if err != nil {
 		var fields apperr.FieldErrors
 		if errors.As(err, &fields) {
@@ -211,6 +236,10 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request, auth authFunc, 
 	// and then got it right is not left carrying those attempts.
 	for _, key := range keys {
 		limiter.Reset(key)
+	}
+
+	if onSuccess != nil {
+		onSuccess(r, user)
 	}
 
 	h.mw.SetCookie(w, token)
@@ -253,14 +282,8 @@ func render(w http.ResponseWriter, r *http.Request, status int, c templ.Componen
 // is never used to authorise anything — so a proxy header that cannot be
 // verified is not a security problem here, and an unparseable one just means
 // the column stays null.
-func clientIP(r *http.Request) netip.Addr {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
-	addr, err := netip.ParseAddr(host)
-	if err != nil {
-		return netip.Addr{}
-	}
-	return addr
-}
+// clientIP is an alias kept so this package reads the same as it did when it
+// owned the implementation. The logic moved to shared/middleware once the
+// exercise limiter needed the identical rule — two copies of "which address do
+// we count against" is how the two limiters end up disagreeing.
+func clientIP(r *http.Request) netip.Addr { return middleware.ClientIP(r) }

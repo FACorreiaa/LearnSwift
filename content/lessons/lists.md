@@ -12,6 +12,9 @@ starter: |
   // tell List what to use as the identity.
   List {
   }
+hint: >-
+  `List` needs to tell rows apart. When the elements are plain strings with
+  no id of their own, the value itself is the identity.
 solution: |
   let names = ["Ada", "Grace", "Alan"]
 

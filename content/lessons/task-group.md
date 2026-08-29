@@ -19,6 +19,10 @@ starter: |
   }
 
   await run()
+hint: >-
+  `withTaskGroup(of:)` gives you a group to `addTask` into, then yields
+  results as they finish. Loop over the group with `for await`, adding each
+  value up as it arrives.
 solution: |
   func double(_ n: Int) async -> Int { n * 2 }
 

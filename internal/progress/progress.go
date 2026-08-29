@@ -26,9 +26,18 @@ type LessonProgress struct {
 	Status      Status
 	StartedAt   time.Time
 	CompletedAt *time.Time
+
+	// SolutionRevealedAt records that this learner asked to be shown the answer.
+	// It is kept beside the completion, not instead of it: a lesson finished
+	// after reading the solution is still finished, and a history that quietly
+	// forgot the difference would be worth less than no history at all.
+	SolutionRevealedAt *time.Time
 }
 
 func (p LessonProgress) IsCompleted() bool { return p.Status == StatusCompleted }
+
+// UsedSolution reports whether the answer was revealed for this lesson.
+func (p LessonProgress) UsedSolution() bool { return p.SolutionRevealedAt != nil }
 
 type Attempt struct {
 	ID         uuid.UUID
@@ -123,6 +132,31 @@ func (s *Service) RecordAttempt(ctx context.Context, userID uuid.UUID, slug, cod
 	}, nil
 }
 
+// FailedAttempts counts the wrong answers this learner has submitted for a
+// lesson. It is what decides when a hint, and then the solution, is offered.
+func (s *Service) FailedAttempts(ctx context.Context, userID uuid.UUID, slug string) (int, error) {
+	n, err := s.q.CountFailedAttempts(ctx, progressdb.CountFailedAttemptsParams{
+		UserID:     userID,
+		LessonSlug: slug,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("progress: count failed attempts: %w", err)
+	}
+	return int(n), nil
+}
+
+// RevealSolution records that the learner asked to see the answer.
+func (s *Service) RevealSolution(ctx context.Context, userID uuid.UUID, slug string) error {
+	err := s.q.MarkSolutionRevealed(ctx, progressdb.MarkSolutionRevealedParams{
+		UserID:     userID,
+		LessonSlug: slug,
+	})
+	if err != nil {
+		return fmt.Errorf("progress: reveal solution %s: %w", slug, err)
+	}
+	return nil
+}
+
 func (s *Service) Attempts(ctx context.Context, userID uuid.UUID, slug string, limit int32) ([]Attempt, error) {
 	rows, err := s.q.ListAttempts(ctx, progressdb.ListAttemptsParams{
 		UserID:     userID,
@@ -158,6 +192,10 @@ func toLessonProgress(row progressdb.UserLesson) LessonProgress {
 	if row.CompletedAt.Valid {
 		completed := row.CompletedAt.Time
 		p.CompletedAt = &completed
+	}
+	if row.SolutionRevealedAt.Valid {
+		revealed := row.SolutionRevealedAt.Time
+		p.SolutionRevealedAt = &revealed
 	}
 	return p
 }

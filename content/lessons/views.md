@@ -10,6 +10,10 @@ starter: |
   struct GreetingView {
       let name = "World"
   }
+hint: >-
+  A view is a struct conforming to `View`, and the one thing that protocol
+  requires is a computed `body`. Its type is `some View`, not a concrete
+  one.
 solution: |
   struct GreetingView: View {
       let name = "World"

@@ -12,8 +12,28 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countFailedAttempts = `-- name: CountFailedAttempts :one
+SELECT count(*) FROM exercise_attempt
+WHERE user_id = $1 AND lesson_slug = $2 AND passed = false
+`
+
+type CountFailedAttemptsParams struct {
+	UserID     uuid.UUID
+	LessonSlug string
+}
+
+// Drives when a hint and then the solution are offered. Counted rather than
+// listed because the handler needs the number and nothing else, and the code
+// column on these rows is the largest thing in the table.
+func (q *Queries) CountFailedAttempts(ctx context.Context, arg CountFailedAttemptsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countFailedAttempts, arg.UserID, arg.LessonSlug)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getLessonProgress = `-- name: GetLessonProgress :one
-SELECT user_id, lesson_slug, status, started_at, completed_at FROM user_lesson
+SELECT user_id, lesson_slug, status, started_at, completed_at, solution_revealed_at FROM user_lesson
 WHERE user_id = $1 AND lesson_slug = $2
 `
 
@@ -31,6 +51,7 @@ func (q *Queries) GetLessonProgress(ctx context.Context, arg GetLessonProgressPa
 		&i.Status,
 		&i.StartedAt,
 		&i.CompletedAt,
+		&i.SolutionRevealedAt,
 	)
 	return i, err
 }
@@ -76,7 +97,7 @@ func (q *Queries) ListAttempts(ctx context.Context, arg ListAttemptsParams) ([]E
 }
 
 const listProgressForUser = `-- name: ListProgressForUser :many
-SELECT user_id, lesson_slug, status, started_at, completed_at FROM user_lesson
+SELECT user_id, lesson_slug, status, started_at, completed_at, solution_revealed_at FROM user_lesson
 WHERE user_id = $1
 ORDER BY lesson_slug
 `
@@ -96,6 +117,7 @@ func (q *Queries) ListProgressForUser(ctx context.Context, userID uuid.UUID) ([]
 			&i.Status,
 			&i.StartedAt,
 			&i.CompletedAt,
+			&i.SolutionRevealedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -105,6 +127,27 @@ func (q *Queries) ListProgressForUser(ctx context.Context, userID uuid.UUID) ([]
 		return nil, err
 	}
 	return items, nil
+}
+
+const markSolutionRevealed = `-- name: MarkSolutionRevealed :exec
+INSERT INTO user_lesson (user_id, lesson_slug, status, solution_revealed_at)
+VALUES ($1, $2, 'in_progress', now())
+ON CONFLICT (user_id, lesson_slug) DO UPDATE
+SET solution_revealed_at = COALESCE(user_lesson.solution_revealed_at, now())
+`
+
+type MarkSolutionRevealedParams struct {
+	UserID     uuid.UUID
+	LessonSlug string
+}
+
+// An upsert rather than an update: a learner reaches this having submitted, and
+// a submission does not require ever having opened the lesson page that creates
+// the row. COALESCE keeps the first reveal, because "when did they give up on
+// this" is asked of the first time, not the most recent.
+func (q *Queries) MarkSolutionRevealed(ctx context.Context, arg MarkSolutionRevealedParams) error {
+	_, err := q.db.Exec(ctx, markSolutionRevealed, arg.UserID, arg.LessonSlug)
+	return err
 }
 
 const recordAttempt = `-- name: RecordAttempt :one
@@ -151,7 +194,7 @@ SET status       = CASE
     -- COALESCE so re-completing keeps the original timestamp: the interesting
     -- fact is when it was first finished, not most recently.
     completed_at = COALESCE(user_lesson.completed_at, EXCLUDED.completed_at)
-RETURNING user_id, lesson_slug, status, started_at, completed_at
+RETURNING user_id, lesson_slug, status, started_at, completed_at, solution_revealed_at
 `
 
 type UpsertLessonProgressParams struct {
@@ -183,6 +226,7 @@ func (q *Queries) UpsertLessonProgress(ctx context.Context, arg UpsertLessonProg
 		&i.Status,
 		&i.StartedAt,
 		&i.CompletedAt,
+		&i.SolutionRevealedAt,
 	)
 	return i, err
 }
