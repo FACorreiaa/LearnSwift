@@ -1,6 +1,6 @@
 # Seshat — blocker & gap backlog
 
-Companion to `docs/product-gaps.md` (the *why*) and `docs/marketing-plan.md` (the *when*).
+Companion to `docs/product-gaps.md` (the *why*), `docs/marketing-plan.md` (the *when*) and `docs/gamification.md` (the *later* — retention mechanics and AI-assisted learning, SG-29…SG-51, all parked behind the gate).
 This file is the *what* — one addressable item at a time, in execution order.
 
 Snapshot: 2026-08-29. IDs are stable; do not renumber when items close.
@@ -394,6 +394,9 @@ Listed so they stop occupying attention, not so they get built.
 | SG-24 | i18n | Not now. |
 | SG-25 | MCP endpoint / public compile API | Already anticipated in `cmd/web/main.go:204-206`. A genuine differentiator later; a distraction now. |
 | SG-26 | Mobile client | Explicitly out of scope. Fix responsive web instead — it serves the same need at 5% of the cost. |
+| SG-29 | Persist guest attempts | Designed in `docs/gamification.md`. Not parked in spirit: guest failures currently leave no row (`exercise_attempt.user_id` is NOT NULL), so "read every failed submission" is impossible for the anonymous strangers the gate is about. Schema-only, no UI. Candidate to do at the gate. |
+| SG-30…SG-39 | Duolingo-style mechanics — streaks, XP, spaced repetition, exercise kinds, path map, achievements, placement, leagues, reminders, mascot | Designed in `docs/gamification.md` with per-item unlock triggers. Retention mechanics with nobody to retain. |
+| SG-40…SG-51 | AI-assisted learning — provider-agnostic LLM layer, error explainer, adaptive hints, code review, tutor, practice variants, failure clustering, adaptive path, search, eval harness, in-editor assist, provenance | Designed in `docs/gamification.md`. The eval harness (SG-49) gates every learner-facing AI item; none ships without a golden set. |
 
 ---
 

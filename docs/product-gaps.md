@@ -106,6 +106,7 @@ Needs: hand-authored before/after screenshots or SVG diagrams per SwiftUI lesson
 - **Accessibility audit.** Keyboard-only path through the editor, focus management on htmx swaps, contrast pass. Do it before it becomes 45 lessons of debt.
 - **i18n.** Not now.
 - **MCP endpoint / public compile API.** Already anticipated in `cmd/web/main.go` comments. A genuine differentiator later ("Swift compilation as an API"), a distraction now.
+- **Gamification + AI-assisted learning.** Streaks, XP, spaced repetition, exercise variety, a path map; an LLM error explainer, adaptive hints, tutor. Designed in `docs/gamification.md` (SG-29…SG-51); every item carries an unlock trigger so it is started by data, not by how much it looks missing.
 
 ---
 
