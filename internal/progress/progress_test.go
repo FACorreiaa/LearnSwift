@@ -89,7 +89,7 @@ func TestStartingAnAlreadyCompletedLessonDoesNotUndoIt(t *testing.T) {
 	}
 
 	// Re-reading a finished lesson is normal, and must not demote it.
-	if err := svc.Start(ctx, user, "optionals"); err != nil {
+	if err = svc.Start(ctx, user, "optionals"); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 

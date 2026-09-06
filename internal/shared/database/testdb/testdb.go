@@ -64,7 +64,7 @@ func New(t *testing.T) *pgxpool.Pool {
 			"  To run the suite without a database instead, unset DATABASE_URL and TEST_DATABASE_URL.\n"+
 			"  underlying error: %v", redact(adminURL), err)
 	}
-	if _, err := admin.Exec(ctx, fmt.Sprintf("CREATE DATABASE %q", name)); err != nil {
+	if _, err = admin.Exec(ctx, fmt.Sprintf("CREATE DATABASE %q", name)); err != nil {
 		_ = admin.Close(ctx)
 		t.Fatalf("testdb: create database: %v", err)
 	}
@@ -72,7 +72,7 @@ func New(t *testing.T) *pgxpool.Pool {
 
 	url := replaceDatabase(adminURL, name)
 
-	if err := database.Migrate(ctx, url); err != nil {
+	if err = database.Migrate(ctx, url); err != nil {
 		dropDatabase(t, adminURL, name)
 		t.Fatalf("testdb: migrate: %v", err)
 	}
