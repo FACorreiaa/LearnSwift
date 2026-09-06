@@ -13,3 +13,10 @@ web/assets/css/sources.generated.css
 
 # swift-validate build output (built by `task validate:build`)
 tools/swift-validate/.build/
+
+# macOS Finder droppings
+.DS_Store
+
+# Per-machine Claude Code settings. Ignored here rather than only in a
+# personal ~/.config/git/ignore, so a fresh clone does not commit one.
+.claude/settings.local.json
