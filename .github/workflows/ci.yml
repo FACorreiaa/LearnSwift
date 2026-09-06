@@ -65,11 +65,25 @@ jobs:
       # Without this the exercise grader is absent, and every test that checks
       # grading — including the cross-check that keeps the Go approximation
       # honest — skips rather than fails. A skipped guard is not a guard.
+      #
+      # --static-swift-stdlib because the binary is built in the Swift container
+      # but run on the bare runner, which has no Swift runtime. A dynamically
+      # linked build dies there with "libswiftCore.so: cannot open shared object
+      # file", surfacing as `exit status 127` in every grading test rather than
+      # as anything that names the real problem.
       - name: Build swift-validate
         run: |
           docker run --rm -v "$PWD/tools/swift-validate":/w -w /w swift:6.3.1 \
-            swift build -c release
-          echo "SWIFT_VALIDATE_BIN=$PWD/tools/swift-validate/.build/release/swift-validate" >> "$GITHUB_ENV"
+            swift build -c release --static-swift-stdlib
+          BIN="$PWD/tools/swift-validate/.build/release/swift-validate"
+
+          # Prove it runs *on this host* before six tests depend on it. Without
+          # this the next runtime regression is again six opaque failures in
+          # two packages instead of one failure that says what broke.
+          echo '{"source":"let x = 1\n","assertions":{"must_declare":["x"],"must_not_use":[]}}' \
+            | "$BIN" > /dev/null
+
+          echo "SWIFT_VALIDATE_BIN=$BIN" >> "$GITHUB_ENV"
 
       - name: gofumpt
         run: bash scripts/check-gofumpt.sh
