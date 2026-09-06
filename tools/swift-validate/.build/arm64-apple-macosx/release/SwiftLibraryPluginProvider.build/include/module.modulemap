@@ -1,3 +1,0 @@
-module SwiftLibraryPluginProvider {
-    header "/Users/fernando_idwell/Work/production/apps/seshat/tools/swift-validate/.build/arm64-apple-macosx/release/SwiftLibraryPluginProvider.build/include/SwiftLibraryPluginProvider-Swift.h"
-}
