@@ -158,17 +158,25 @@ func TestTheLandingPageRendersWithoutAnIndex(t *testing.T) {
 	}
 }
 
-// The layout's htmx configuration is a contract between the server's status
-// codes and what the visitor actually sees. Three statuses carry a rendered
-// answer rather than an error, and htmx discards non-2xx responses unless told
-// otherwise — so a status missing from this list is a panel nobody ever reads.
+// The htmx configuration is a contract between the server's status codes and
+// what the visitor actually sees. htmx 4 swaps everything except 204 and 304,
+// so the layout blankets 4xx and 5xx and each element opts its own answers back
+// in with hx-status. Three statuses carry a rendered answer rather than an
+// error; a status missing its hx-status is a panel nobody ever reads.
 func TestHtmxSwapsEveryStatusThatCarriesAnAnswer(t *testing.T) {
 	body := get(t, routes(testConfig(), nil, realIndex(t), newServices(nil, testConfig())), "/").Body.String()
 
+	// Without the blanket rule every failure body would be swapped into the
+	// page, including the plain-text 403 behind the hint and solution gates.
+	if !strings.Contains(body, `"noSwap": [204, 304, "4xx", "5xx"]`) {
+		t.Error("the layout no longer blocks 4xx and 5xx swaps, so error bodies land in the page")
+	}
+
+	// The landing page embeds the real exercise form, so its opt-ins are here.
 	for _, code := range []string{"422", "429", "503"} {
-		want := `{"code":"` + code + `","swap":true}`
+		want := `hx-status:` + code + `="swap:outerHTML"`
 		if !strings.Contains(body, want) {
-			t.Errorf("htmx-config does not swap %s, so that panel is rendered and thrown away", code)
+			t.Errorf("the exercise form does not swap %s, so that panel is rendered and thrown away", code)
 		}
 	}
 }
