@@ -214,6 +214,7 @@ func parseOne(md goldmark.Markdown, slug string, raw []byte) (lesson.Lesson, err
 		Summary:    fm.Summary,
 		Runtime:    fm.Runtime,
 		BodyHTML:   html.String(),
+		Body:       string(body),
 		Starter:    fm.Starter,
 		Hint:       fm.Hint,
 		Solution:   fm.Solution,

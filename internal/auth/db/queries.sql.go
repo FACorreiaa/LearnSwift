@@ -13,6 +13,39 @@ import (
 	"github.com/google/uuid"
 )
 
+const createAPIToken = `-- name: CreateAPIToken :one
+INSERT INTO api_token (user_id, token_hash, label, expires_at)
+VALUES ($1, $2, $3, $4)
+RETURNING id, user_id, token_hash, label, created_at, last_used_at, expires_at
+`
+
+type CreateAPITokenParams struct {
+	UserID    uuid.UUID
+	TokenHash []byte
+	Label     string
+	ExpiresAt time.Time
+}
+
+func (q *Queries) CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error) {
+	row := q.db.QueryRow(ctx, createAPIToken,
+		arg.UserID,
+		arg.TokenHash,
+		arg.Label,
+		arg.ExpiresAt,
+	)
+	var i ApiToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.Label,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.ExpiresAt,
+	)
+	return i, err
+}
+
 const createSession = `-- name: CreateSession :one
 INSERT INTO sessions (user_id, token_hash, expires_at, user_agent, ip)
 VALUES ($1, $2, $3, $4, $5)
@@ -73,6 +106,39 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteAPIToken = `-- name: DeleteAPIToken :execrows
+DELETE FROM api_token
+WHERE id = $1 AND user_id = $2
+`
+
+type DeleteAPITokenParams struct {
+	ID     uuid.UUID
+	UserID uuid.UUID
+}
+
+// Scoped by user_id as well as id: without it, knowing any token's id would be
+// enough to revoke somebody else's.
+func (q *Queries) DeleteAPIToken(ctx context.Context, arg DeleteAPITokenParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteAPIToken, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteExpiredAPITokens = `-- name: DeleteExpiredAPITokens :execrows
+DELETE FROM api_token
+WHERE expires_at <= now()
+`
+
+func (q *Queries) DeleteExpiredAPITokens(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredAPITokens)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteExpiredSessions = `-- name: DeleteExpiredSessions :execrows
 DELETE FROM sessions
 WHERE expires_at <= now()
@@ -104,6 +170,44 @@ WHERE user_id = $1
 func (q *Queries) DeleteSessionsForUser(ctx context.Context, userID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteSessionsForUser, userID)
 	return err
+}
+
+const getAPITokenWithUser = `-- name: GetAPITokenWithUser :one
+SELECT
+    api_token.id, api_token.user_id, api_token.token_hash, api_token.label, api_token.created_at, api_token.last_used_at, api_token.expires_at,
+    users.id, users.email, users.password_hash, users.created_at, users.updated_at
+FROM api_token
+JOIN users ON users.id = api_token.user_id
+WHERE api_token.token_hash = $1
+  AND api_token.expires_at > now()
+`
+
+type GetAPITokenWithUserRow struct {
+	ApiToken ApiToken
+	User     User
+}
+
+// Returns the token and its user together, for the same reason the session
+// lookup does: an authenticated request needs both. Expired rows are excluded
+// here rather than deleted on read, so the lookup stays a pure read.
+func (q *Queries) GetAPITokenWithUser(ctx context.Context, tokenHash []byte) (GetAPITokenWithUserRow, error) {
+	row := q.db.QueryRow(ctx, getAPITokenWithUser, tokenHash)
+	var i GetAPITokenWithUserRow
+	err := row.Scan(
+		&i.ApiToken.ID,
+		&i.ApiToken.UserID,
+		&i.ApiToken.TokenHash,
+		&i.ApiToken.Label,
+		&i.ApiToken.CreatedAt,
+		&i.ApiToken.LastUsedAt,
+		&i.ApiToken.ExpiresAt,
+		&i.User.ID,
+		&i.User.Email,
+		&i.User.PasswordHash,
+		&i.User.CreatedAt,
+		&i.User.UpdatedAt,
+	)
+	return i, err
 }
 
 const getSessionWithUser = `-- name: GetSessionWithUser :one
@@ -182,6 +286,63 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listAPITokensForUser = `-- name: ListAPITokensForUser :many
+SELECT id, user_id, label, created_at, last_used_at, expires_at
+FROM api_token
+WHERE user_id = $1
+ORDER BY created_at DESC
+`
+
+type ListAPITokensForUserRow struct {
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	Label      string
+	CreatedAt  time.Time
+	LastUsedAt time.Time
+	ExpiresAt  time.Time
+}
+
+// Ordered newest first, which is the order a learner reasons about them in.
+// The digest is not selected: nothing outside the lookup has any use for it,
+// and a page that never holds it cannot leak it.
+func (q *Queries) ListAPITokensForUser(ctx context.Context, userID uuid.UUID) ([]ListAPITokensForUserRow, error) {
+	rows, err := q.db.Query(ctx, listAPITokensForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAPITokensForUserRow{}
+	for rows.Next() {
+		var i ListAPITokensForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Label,
+			&i.CreatedAt,
+			&i.LastUsedAt,
+			&i.ExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const touchAPIToken = `-- name: TouchAPIToken :exec
+UPDATE api_token
+SET last_used_at = now()
+WHERE id = $1
+`
+
+func (q *Queries) TouchAPIToken(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, touchAPIToken, id)
+	return err
 }
 
 const touchSession = `-- name: TouchSession :exec

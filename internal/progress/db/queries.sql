@@ -30,8 +30,11 @@ WHERE user_id = $1
 ORDER BY lesson_slug;
 
 -- name: RecordAttempt :one
-INSERT INTO exercise_attempt (user_id, lesson_slug, code, passed)
-VALUES ($1, $2, $3, $4)
+-- Provenance is passed in rather than derived here: only the caller knows
+-- whether this arrived as a form post from an editor or as a tool call from an
+-- agent, and that difference is the whole value of the column.
+INSERT INTO exercise_attempt (user_id, lesson_slug, code, passed, provenance)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: ListAttempts :many

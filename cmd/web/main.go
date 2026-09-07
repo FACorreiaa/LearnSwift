@@ -26,7 +26,10 @@ import (
 	"github.com/FACorreiaa/seshat/internal/compiler"
 	"github.com/FACorreiaa/seshat/internal/config"
 	"github.com/FACorreiaa/seshat/internal/executor"
+	"github.com/FACorreiaa/seshat/internal/grading"
+	"github.com/FACorreiaa/seshat/internal/leaderboard"
 	"github.com/FACorreiaa/seshat/internal/lessons"
+	"github.com/FACorreiaa/seshat/internal/mcp"
 	"github.com/FACorreiaa/seshat/internal/progress"
 	"github.com/FACorreiaa/seshat/internal/shared/analytics"
 	"github.com/FACorreiaa/seshat/internal/shared/database"
@@ -132,6 +135,10 @@ func run(cfg config.Config) error {
 	// with the process.
 	go auth.SweepExpiredSessions(ctx, svc.auth.Sessions(), slog.Default())
 
+	// Expired access tokens are likewise already refused by their lookup; this
+	// only keeps the table from growing without bound.
+	go auth.SweepExpiredAPITokens(ctx, svc.tokens, slog.Default())
+
 	srv := &http.Server{
 		Addr:    cfg.ListenAddr,
 		Handler: routes(cfg, pool, index, svc),
@@ -172,11 +179,13 @@ func run(cfg config.Config) error {
 // the compile worker in a later phase — shares the instance the handlers use
 // rather than constructing a second one against the same pool.
 type services struct {
-	auth      *auth.Service
-	progress  *progress.Service
-	validator *validate.Validator
-	executor  *executor.Executor
-	analytics analytics.Client
+	auth        *auth.Service
+	tokens      *auth.TokenStore
+	progress    *progress.Service
+	leaderboard *leaderboard.Service
+	validator   *validate.Validator
+	executor    *executor.Executor
+	analytics   analytics.Client
 }
 
 func newServices(pool *pgxpool.Pool, cfg config.Config) *services {
@@ -191,7 +200,9 @@ func newServices(pool *pgxpool.Pool, cfg config.Config) *services {
 	}
 	if pool != nil {
 		svc.auth = auth.NewService(pool)
+		svc.tokens = auth.NewTokenStore(pool)
 		svc.progress = progress.New(pool)
+		svc.leaderboard = leaderboard.New(pool)
 	}
 	return svc
 }
@@ -213,17 +224,46 @@ func routes(cfg config.Config, pool *pgxpool.Pool, index *lessons.Index, svc *se
 	var (
 		authHandler   *auth.Handler
 		lessonHandler *lessons.Handler
+		boardHandler  *leaderboard.Handler
 		authMW        *auth.Middleware
 	)
 	if pool != nil {
 		authMW = auth.NewMiddleware(svc.auth.Sessions(), cfg.IsProduction())
-		authHandler = auth.NewHandler(svc.auth, authMW, svc.analytics)
+		authHandler = auth.NewHandler(svc.auth, authMW, svc.analytics, svc.tokens, cfg.BaseURL)
 		lessonHandler = lessons.NewHandler(index, svc.progress, svc.validator, svc.executor, svc.analytics, cfg.IsProduction())
+		boardHandler = leaderboard.NewHandler(svc.leaderboard, authMW)
 	}
 
-	// The browser group. Non-browser callers — the MCP endpoint and the compile
-	// API in later phases — get their own sibling groups outside CSRF, because
-	// a client that holds a bearer token has no cookie to double-submit.
+	// The MCP endpoint. A sibling group outside CSRF, because a client holding
+	// a bearer token has no cookie to double-submit — and because accepting a
+	// cookie here would make this reachable from a page in another tab, which
+	// is precisely what the CSRF middleware exists to prevent everywhere else.
+	//
+	// Bearer authentication is not optional on it. Every tool either reads a
+	// learner's progress or writes to it, so there is no public call to make.
+	if pool != nil && cfg.MCPEnabled {
+		// A second grading.Service, and deliberately so: it is a stateless
+		// facade over the same validator, executor, progress store and
+		// analytics client the browser handler wraps, so two of them cannot
+		// disagree. Threading one instance through both would mean changing
+		// lessons.NewHandler's signature for no behavioural gain.
+		mcpServer := mcp.NewServer(
+			index,
+			grading.New(svc.validator, svc.executor, svc.progress, svc.analytics),
+			svc.progress,
+			slog.Default(),
+		)
+		bearer := auth.NewBearerMiddleware(svc.tokens)
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.MaxBody(1 << 20))
+			r.Use(bearer.RequireToken)
+			r.Handle("/mcp", mcpServer.Handler())
+		})
+	}
+
+	// The browser group. The compile API in a later phase gets its own sibling
+	// group here for the same reasons.
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.MaxBody(1 << 20))
 		r.Use(middleware.CSRF(cfg.IsProduction()))
@@ -241,6 +281,7 @@ func routes(cfg config.Config, pool *pgxpool.Pool, index *lessons.Index, svc *se
 			// someone signed in and the marketing page for everyone else, and
 			// deciding that needs the progress service.
 			authHandler.Routes(r)
+			boardHandler.Routes(r)
 			lessonHandler.Routes(r)
 		} else {
 			// nil pool is the routing tests. Nobody can be signed in, so the

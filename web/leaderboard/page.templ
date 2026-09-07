@@ -1,0 +1,159 @@
+package leaderboard
+
+import (
+	"fmt"
+	"github.com/FACorreiaa/seshat/web/shared/layout"
+)
+
+type Standing struct {
+	Rank        int
+	DisplayName string
+	Solo        int64
+	Assisted    int64
+
+	// You marks the viewer's own row, so a learner can find themselves without
+	// reading every name.
+	You bool
+}
+
+type View struct {
+	Solo     []Standing
+	Assisted []Standing
+
+	// SignedIn decides whether the opt-in form is offered at all.
+	SignedIn bool
+
+	// Name is the viewer's current display name, empty when they have not
+	// opted in.
+	Name string
+
+	// OptedIn distinguishes "not on the board" from "on it under this name",
+	// which Name alone cannot do.
+	OptedIn bool
+
+	Error string
+}
+
+templ Page(v View) {
+	@layout.Public(layout.Meta{
+		Title:       "Leaderboard — Seshat",
+		Description: "Two boards: lessons solved unaided, and lessons solved with an agent's help.",
+		Path:        "/leaderboard",
+	}) {
+		<div class="mx-auto max-w-3xl px-6 py-16">
+			<h1 class="text-2xl font-semibold tracking-tight">Leaderboard</h1>
+			<p class="text-muted-foreground mt-2 text-sm">
+				Two boards, because they measure different things. <strong class="text-foreground">Solo</strong> counts
+				lessons you worked out and typed yourself, with the solution never revealed.
+				<strong class="text-foreground">Assisted</strong> counts everything else, including every submission
+				that came in from an editor through an access token.
+			</p>
+			<p class="text-muted-foreground mt-2 text-sm">
+				Neither is a qualification. Nobody is watching you type, and the only person a
+				misreported number costs is you.
+			</p>
+			if v.SignedIn {
+				@optInForm(v)
+			} else {
+				<p class="text-muted-foreground mt-6 text-sm">
+					<a href="/login" class="underline">Sign in</a> to appear here. Nobody is listed
+					without asking to be.
+				</p>
+			}
+			<div class="mt-10 grid gap-10 sm:grid-cols-2">
+				@board("Solo", "solved unaided", v.Solo, true)
+				@board("Assisted", "solved with help", v.Assisted, false)
+			</div>
+		</div>
+	}
+}
+
+templ optInForm(v View) {
+	<form method="post" action="/leaderboard/opt-in" class="border-border mt-8 rounded-md border p-4">
+		@layout.CSRFInput()
+		<label for="display_name" class="text-sm font-medium">
+			if v.OptedIn {
+				Your name on the board
+			} else {
+				Join the board
+			}
+		</label>
+		<p class="text-muted-foreground mt-1 text-xs">
+			Shown to everyone. Not your email — pick anything you are happy to be known by.
+		</p>
+		<div class="mt-3 flex flex-wrap gap-3">
+			<input
+				id="display_name"
+				name="display_name"
+				type="text"
+				required
+				minlength="3"
+				maxlength="24"
+				value={ v.Name }
+				placeholder="your name here"
+				autocomplete="off"
+				class="bg-muted focus-visible:ring-ring min-w-56 flex-1 rounded-md px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+			/>
+			<button
+				type="submit"
+				class="bg-primary text-primary-foreground hover:bg-primary/90 h-10 rounded-md px-4 text-sm font-medium"
+			>
+				if v.OptedIn {
+					Change name
+				} else {
+					Join
+				}
+			</button>
+		</div>
+		if v.Error != "" {
+			<p role="alert" class="text-destructive mt-3 text-sm">{ v.Error }</p>
+		}
+	</form>
+	if v.OptedIn {
+		// A separate form, so leaving is never a stray click on the form that
+		// renames.
+		<form method="post" action="/leaderboard/opt-out" class="mt-3">
+			@layout.CSRFInput()
+			<button type="submit" class="text-muted-foreground hover:text-foreground text-xs underline">
+				Leave the board
+			</button>
+		</form>
+	}
+}
+
+templ board(title, subtitle string, standings []Standing, solo bool) {
+	<section>
+		<h2 class="text-sm font-semibold">{ title }</h2>
+		<p class="text-muted-foreground text-xs">{ subtitle }</p>
+		if len(standings) == 0 {
+			<p class="text-muted-foreground mt-3 text-sm">Nobody yet.</p>
+		} else {
+			<ol class="divide-border mt-3 divide-y">
+				for _, s := range standings {
+					<li
+						class={ "flex items-baseline gap-3 py-2",
+							templ.KV("bg-primary/5 -mx-2 px-2 rounded", s.You) }
+					>
+						<span class="text-muted-foreground w-6 text-xs tabular-nums">{ fmt.Sprint(s.Rank) }</span>
+						<span class="min-w-0 flex-1 truncate text-sm">
+							{ s.DisplayName }
+							if s.You {
+								<span class="text-muted-foreground ml-1 text-xs">you</span>
+							}
+						</span>
+						<span class="text-sm font-medium tabular-nums">{ fmt.Sprint(count(s, solo)) }</span>
+					</li>
+				}
+			</ol>
+		}
+	</section>
+}
+
+// count picks the column this board ranks by, so the template does not carry
+// two nearly identical branches.
+func count(s Standing, solo bool) int64 {
+	if solo {
+		return s.Solo
+	}
+	return s.Assisted
+}

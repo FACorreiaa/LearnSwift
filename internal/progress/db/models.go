@@ -18,6 +18,7 @@ type ExerciseAttempt struct {
 	Code       string
 	Passed     bool
 	CreatedAt  time.Time
+	Provenance string
 }
 
 type UserLesson struct {

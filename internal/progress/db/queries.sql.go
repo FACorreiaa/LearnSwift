@@ -57,7 +57,7 @@ func (q *Queries) GetLessonProgress(ctx context.Context, arg GetLessonProgressPa
 }
 
 const listAttempts = `-- name: ListAttempts :many
-SELECT id, user_id, lesson_slug, code, passed, created_at FROM exercise_attempt
+SELECT id, user_id, lesson_slug, code, passed, created_at, provenance FROM exercise_attempt
 WHERE user_id = $1 AND lesson_slug = $2
 ORDER BY created_at DESC
 LIMIT $3
@@ -85,6 +85,7 @@ func (q *Queries) ListAttempts(ctx context.Context, arg ListAttemptsParams) ([]E
 			&i.Code,
 			&i.Passed,
 			&i.CreatedAt,
+			&i.Provenance,
 		); err != nil {
 			return nil, err
 		}
@@ -151,9 +152,9 @@ func (q *Queries) MarkSolutionRevealed(ctx context.Context, arg MarkSolutionReve
 }
 
 const recordAttempt = `-- name: RecordAttempt :one
-INSERT INTO exercise_attempt (user_id, lesson_slug, code, passed)
-VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, lesson_slug, code, passed, created_at
+INSERT INTO exercise_attempt (user_id, lesson_slug, code, passed, provenance)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, user_id, lesson_slug, code, passed, created_at, provenance
 `
 
 type RecordAttemptParams struct {
@@ -161,14 +162,19 @@ type RecordAttemptParams struct {
 	LessonSlug string
 	Code       string
 	Passed     bool
+	Provenance string
 }
 
+// Provenance is passed in rather than derived here: only the caller knows
+// whether this arrived as a form post from an editor or as a tool call from an
+// agent, and that difference is the whole value of the column.
 func (q *Queries) RecordAttempt(ctx context.Context, arg RecordAttemptParams) (ExerciseAttempt, error) {
 	row := q.db.QueryRow(ctx, recordAttempt,
 		arg.UserID,
 		arg.LessonSlug,
 		arg.Code,
 		arg.Passed,
+		arg.Provenance,
 	)
 	var i ExerciseAttempt
 	err := row.Scan(
@@ -178,6 +184,7 @@ func (q *Queries) RecordAttempt(ctx context.Context, arg RecordAttemptParams) (E
 		&i.Code,
 		&i.Passed,
 		&i.CreatedAt,
+		&i.Provenance,
 	)
 	return i, err
 }

@@ -93,6 +93,12 @@ type Lesson struct {
 	// construction — which is the only reason a template writes it unescaped.
 	BodyHTML string
 
+	// Body is the same text before rendering. Kept because HTML is the wrong
+	// format for a reader that is not a browser: an agent handed markup spends
+	// tokens on tags, and the code fences a lesson leans on survive markdown
+	// far better than they survive a <pre>.
+	Body string
+
 	Starter string
 
 	// Hint is one sentence pointing at the shape of the answer without giving

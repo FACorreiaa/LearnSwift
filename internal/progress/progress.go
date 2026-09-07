@@ -45,6 +45,12 @@ type Attempt struct {
 	Code       string
 	Passed     bool
 	CreatedAt  time.Time
+
+	// Provenance is what is known about who wrote the code. Stored as a string
+	// rather than a type of this package's own: the vocabulary belongs to
+	// internal/grading, which is what decides the label, and duplicating the
+	// closed set here would give it two definitions to drift between.
+	Provenance string
 }
 
 type Service struct {
@@ -113,12 +119,13 @@ func (s *Service) ForUser(ctx context.Context, userID uuid.UUID) (map[string]Les
 	return out, nil
 }
 
-func (s *Service) RecordAttempt(ctx context.Context, userID uuid.UUID, slug, code string, passed bool) (Attempt, error) {
+func (s *Service) RecordAttempt(ctx context.Context, userID uuid.UUID, slug, code string, passed bool, provenance string) (Attempt, error) {
 	row, err := s.q.RecordAttempt(ctx, progressdb.RecordAttemptParams{
 		UserID:     userID,
 		LessonSlug: slug,
 		Code:       code,
 		Passed:     passed,
+		Provenance: provenance,
 	})
 	if err != nil {
 		return Attempt{}, fmt.Errorf("progress: record attempt: %w", err)
@@ -129,6 +136,7 @@ func (s *Service) RecordAttempt(ctx context.Context, userID uuid.UUID, slug, cod
 		Code:       row.Code,
 		Passed:     row.Passed,
 		CreatedAt:  row.CreatedAt,
+		Provenance: row.Provenance,
 	}, nil
 }
 

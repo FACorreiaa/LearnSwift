@@ -34,7 +34,7 @@ func postForm(t *testing.T, h http.Handler, path, email, password, remoteAddr st
 // decide what "the credentials were wrong" means without a user table.
 func newTestHandler(result error) (*Handler, *int) {
 	calls := 0
-	h := NewHandler(nil, &Middleware{}, nil)
+	h := NewHandler(nil, &Middleware{}, nil, nil, "http://localhost")
 
 	// Replace the routes with ones bound to the stub. This mirrors what
 	// Routes(r) wires up, minus the service.

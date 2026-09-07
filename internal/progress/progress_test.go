@@ -141,14 +141,14 @@ func TestAttemptsAreScopedAndNewestFirst(t *testing.T) {
 	bob := newUser(t, pool, "b@example.com")
 
 	for _, code := range []string{"first", "second", "third"} {
-		if _, err := svc.RecordAttempt(ctx, alice, "optionals", code, false); err != nil {
+		if _, err := svc.RecordAttempt(ctx, alice, "optionals", code, false, "typed"); err != nil {
 			t.Fatalf("record: %v", err)
 		}
 		// The ordering index is on created_at, and three inserts inside one
 		// clock tick would order arbitrarily.
 		time.Sleep(2 * time.Millisecond)
 	}
-	if _, err := svc.RecordAttempt(ctx, bob, "optionals", "bob's", true); err != nil {
+	if _, err := svc.RecordAttempt(ctx, bob, "optionals", "bob's", true, "typed"); err != nil {
 		t.Fatalf("record: %v", err)
 	}
 
@@ -189,7 +189,7 @@ func TestDeletingAUserRemovesTheirProgress(t *testing.T) {
 	if err := svc.Complete(ctx, user, "optionals"); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
-	if _, err := svc.RecordAttempt(ctx, user, "optionals", "code", true); err != nil {
+	if _, err := svc.RecordAttempt(ctx, user, "optionals", "code", true, "typed"); err != nil {
 		t.Fatalf("record: %v", err)
 	}
 
@@ -206,5 +206,63 @@ func TestDeletingAUserRemovesTheirProgress(t *testing.T) {
 		if count != 0 {
 			t.Errorf("%s still holds %d rows after the user was deleted", table, count)
 		}
+	}
+}
+
+// The label is the whole reason the column exists, so it is worth proving it
+// survives the trip rather than being written and read back as a default.
+func TestProvenanceIsStoredAsGiven(t *testing.T) {
+	pool := testdb.New(t)
+	ctx := context.Background()
+	svc := New(pool)
+	user := newUser(t, pool, "provenance@example.com")
+
+	for _, want := range []string{"unknown", "typed", "mixed", "pasted", "agent"} {
+		t.Run(want, func(t *testing.T) {
+			got, err := svc.RecordAttempt(ctx, user, "optionals", "let a = 1", false, want)
+			if err != nil {
+				t.Fatalf("record: %v", err)
+			}
+			if got.Provenance != want {
+				t.Errorf("provenance = %q, want %q", got.Provenance, want)
+			}
+		})
+	}
+}
+
+// Every attempt recorded before this column existed is honestly 'unknown', and
+// the default is what makes that true without a backfill.
+func TestAnAttemptWithNoProvenanceIsUnknown(t *testing.T) {
+	pool := testdb.New(t)
+	ctx := context.Background()
+	user := newUser(t, pool, "default-provenance@example.com")
+
+	var got string
+	err := pool.QueryRow(ctx,
+		`INSERT INTO exercise_attempt (user_id, lesson_slug, code, passed)
+		 VALUES ($1, 'optionals', 'let a = 1', false)
+		 RETURNING provenance`, user).Scan(&got)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if got != "unknown" {
+		t.Errorf("provenance = %q, want %q", got, "unknown")
+	}
+}
+
+// The set is closed, and a column that accepts anything is a column whose
+// values cannot be counted on. Worth proving the constraint is enforced rather
+// than assumed — the application reduces a bad label to 'unknown' before it
+// gets here, and this is what makes that belt-and-braces rather than the only
+// thing standing between a typo and an uncountable table.
+func TestTheDatabaseRejectsAnUnknownProvenanceLabel(t *testing.T) {
+	pool := testdb.New(t)
+	user := newUser(t, pool, "bad-provenance@example.com")
+
+	_, err := pool.Exec(context.Background(),
+		`INSERT INTO exercise_attempt (user_id, lesson_slug, code, passed, provenance)
+		 VALUES ($1, 'optionals', 'let a = 1', false, 'copilot')`, user)
+	if err == nil {
+		t.Fatal("the database accepted a provenance label outside the set")
 	}
 }

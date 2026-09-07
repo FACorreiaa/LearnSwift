@@ -66,3 +66,12 @@ sql:
         package: progressdb
         out: internal/progress/db
         overrides: *overrides
+
+  - <<: *auth
+    queries: internal/leaderboard/db/queries.sql
+    gen:
+      go:
+        <<: *gen
+        package: leaderboarddb
+        out: internal/leaderboard/db
+        overrides: *overrides
