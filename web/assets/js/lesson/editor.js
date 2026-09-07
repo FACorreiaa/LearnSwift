@@ -131,4 +131,4 @@ if (document.readyState === 'loading') {
 
 // htmx swaps the result panel, and may later swap the form itself. Re-running
 // init is safe: setupEditor is guarded against binding twice.
-document.body?.addEventListener('htmx:afterSwap', init);
+document.body?.addEventListener('htmx:after:swap', init);

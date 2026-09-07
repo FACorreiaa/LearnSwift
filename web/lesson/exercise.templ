@@ -105,11 +105,18 @@ templ exercise(v View) {
 // pipeline — not a mock. A landing page that demonstrates the product with a
 // fake of the product is the one thing worse than not demonstrating it.
 templ ExerciseForm(v View) {
+	// /check answers with 422 for a submission found wanting, 429 for the quota
+	// and busy panels, and 503 when the grader could not run. All three carry a
+	// result panel meant for the page, so the hx-status attributes below opt
+	// them back in against the blanket 4xx/5xx no-swap in the layout.
 	<form
 		hx-post={ "/lessons/" + v.Lesson.Slug + "/check" }
 		hx-target="#exercise-result"
 		hx-swap="outerHTML"
-		hx-disabled-elt="find button"
+		hx-disable="find button"
+		hx-status:422="swap:outerHTML"
+		hx-status:429="swap:outerHTML"
+		hx-status:503="swap:outerHTML"
 	>
 		@layout.CSRFInput()
 		<label for="code" class="sr-only">Your Swift code</label>
