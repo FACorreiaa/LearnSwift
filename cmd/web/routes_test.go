@@ -84,6 +84,7 @@ func TestAssetsAreServedFromTheEmbeddedFilesystem(t *testing.T) {
 	for _, path := range []string{
 		"/assets/css/output.css",
 		"/assets/js/vendor/htmx.min.js",
+		"/assets/js/vendor/hx-alpine-compat.min.js",
 		"/assets/js/vendor/alpine.min.js",
 		"/assets/js/vendor/three.module.min.js",
 		"/assets/js/vendor/three.core.min.js",
