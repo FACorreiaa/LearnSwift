@@ -92,7 +92,7 @@ function init() {
 
   // htmx swaps the body content on navigation, which would leave the WebGL
   // context attached to a canvas no longer in the document.
-  document.body.addEventListener('htmx:beforeSwap', () => {
+  document.body.addEventListener('htmx:before:swap', () => {
     if (canvas.isConnected) return;
     mascot?.dispose();
     mascot = null;

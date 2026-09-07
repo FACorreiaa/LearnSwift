@@ -35,19 +35,29 @@ templ Base(m Meta) {
 			// Read by htmx as it initialises, so it must precede the script tag
 			// rather than being set from JavaScript afterwards.
 			//
-			// htmx discards non-2xx responses by default, which throws away the
-			// three failures this app most needs to render: 422 carries a form or
-			// an exercise result with inline diagnostics, 429 carries the quota
-			// panel, and 503 carries "the grader could not run — this is our
-			// fault, not your code's". All three are answers, not errors, and all
-			// three are meant to be swapped into the page.
+			// htmx 4 inverts the htmx 2 default and swaps every response except
+			// 204 and 304, so this restores the old rule: a failure body is not
+			// page content unless the element asking for it says so.
+			//
+			// The three failures this app does need to render — 422 for a form or
+			// an exercise result with inline diagnostics, 429 for the quota and
+			// busy panels, 503 for "the grader could not run, this is our fault,
+			// not your code's" — are now opted back in per element with
+			// hx-status:<code>, on the form that posts to the route that returns
+			// them. htmx checks the exact status before the wildcard, so those
+			// attributes win over the 4xx and 5xx entries here.
 			//
 			// 503 in particular: without it, a learner whose submission hits an
 			// unavailable compiler sees absolutely nothing happen, which is a
 			// worse outcome than the wrong verdict the panel exists to avoid.
+			//
+			// Unlike htmx 2's responseHandling there is no way to mark a status
+			// as "swap, but not an error": htmx 4 fires htmx:response:error for
+			// every response over 400 regardless. Nothing here listens for it,
+			// so the distinction has no consumer to lose.
 			<meta
 				name="htmx-config"
-				content='{"responseHandling":[{"code":"422","swap":true},{"code":"429","swap":true},{"code":"503","swap":true},{"code":"[23]..","swap":true},{"code":"[45]..","swap":false,"error":true}]}'
+				content='{"noSwap": [204, 304, "4xx", "5xx"]}'
 			/>
 			<link rel="preload" href="/assets/fonts/geist/geist-variable.woff2" as="font" type="font/woff2" crossorigin="anonymous"/>
 			<link rel="preload" href="/assets/fonts/geist/geist-mono-variable.woff2" as="font" type="font/woff2" crossorigin="anonymous"/>
@@ -55,6 +65,7 @@ templ Base(m Meta) {
 			<link href="/assets/css/output.css" rel="stylesheet"/>
 			@themeScript()
 			<script src="/assets/js/vendor/htmx.min.js"></script>
+			<script src="/assets/js/vendor/hx-alpine-compat.min.js"></script>
 			<script defer src="/assets/js/vendor/alpine.min.js"></script>
 		</head>
 		<body class="h-full bg-background text-foreground">

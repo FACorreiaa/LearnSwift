@@ -20,16 +20,19 @@ ending in `from"` followed by an operator). Read the match before acting on it.
 
 | File | Package | Version | License | Source |
 |---|---|---|---|---|
-| `htmx.min.js` | htmx.org | 2.0.7 | Zero-Clause BSD | copied from north-web-app 2026-08-22 |
-| `htmx-ext-sse.js` | htmx-ext-sse | **unrecorded** | Zero-Clause BSD | copied from north-web-app 2026-08-22 |
+| `htmx.min.js` | htmx.org | 4.0.0 | Zero-Clause BSD | `dist/htmx.min.js` at tag v4.0.0, 2026-09-07 |
+| `hx-alpine-compat.min.js` | htmx.org | 4.0.0 | Zero-Clause BSD | `dist/ext/hx-alpine-compat.min.js` at tag v4.0.0, 2026-09-07 |
 | `alpine.min.js` | alpinejs | 3.15.0 | MIT | copied from north-web-app 2026-08-22 |
 | `three.module.min.js` | three | 0.180.0 (r180) | MIT | `https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.min.js` |
 | `three.core.min.js` | three | 0.180.0 (r180) | MIT | `https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.core.min.js` |
 
-The htmx and Alpine versions are inherited from North's table, which leaves
-`htmx-ext-sse` unrecorded. Treat that one's version as unknown until someone diffs
-it against a release — it matters before Phase 2, which streams compile results
-over SSE.
+The Alpine version is inherited from North's table. htmx is now pinned to a tag
+rather than copied between projects, so it can be re-fetched and diffed.
+
+`htmx-ext-sse.js` is gone: it was never loaded by any layout, and htmx 4 replaces
+it with `dist/ext/hx-sse.js` from the same release anyway. Phase 2, which streams
+compile results over SSE, should vendor that file from the htmx tag when it needs
+it rather than resurrecting the htmx 2 extension.
 
 **The two three.js files are a pair and must be upgraded together.** From r165 or
 so the build is split, and `three.module.min.js` does

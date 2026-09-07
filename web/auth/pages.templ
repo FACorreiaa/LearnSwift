@@ -31,7 +31,7 @@ templ LoginPage(form Form) {
 // Re-sending the whole document would lose the visitor's scroll position and
 // re-run every script on the page.
 templ LoginForm(form Form) {
-	<form id="auth-form" method="post" action="/login" hx-post="/login" hx-target="this" hx-swap="outerHTML" class="space-y-4">
+	<form id="auth-form" method="post" action="/login" hx-post="/login" hx-target="this" hx-swap="outerHTML" hx-status:422="swap:outerHTML" hx-status:429="swap:outerHTML" class="space-y-4">
 		@layout.CSRFInput()
 		@formError(form.Err("form"))
 		@field("email", "Email", "email", form.Email, form.Err("email"), "username")
@@ -55,7 +55,7 @@ templ RegisterPage(form Form) {
 }
 
 templ RegisterForm(form Form) {
-	<form id="auth-form" method="post" action="/register" hx-post="/register" hx-target="this" hx-swap="outerHTML" class="space-y-4">
+	<form id="auth-form" method="post" action="/register" hx-post="/register" hx-target="this" hx-swap="outerHTML" hx-status:422="swap:outerHTML" hx-status:429="swap:outerHTML" class="space-y-4">
 		@layout.CSRFInput()
 		@formError(form.Err("form"))
 		@field("email", "Email", "email", form.Email, form.Err("email"), "username")
