@@ -8,6 +8,7 @@ package apperr
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 var (
@@ -58,3 +59,23 @@ func (f FieldErrors) Add(field, msg string) FieldErrors {
 }
 
 func (f FieldErrors) Any() bool { return len(f) > 0 }
+
+// Message is the part of a wrapped error meant for a person.
+//
+// A validation error is built as `fmt.Errorf("%w: a token needs a name", ...)`,
+// which reads correctly in a log and badly on a page — the sentinel's own text
+// is in front of the sentence. This drops it, leaving what a service actually
+// wrote for the reader.
+//
+// Only ever called on an error already known to be ErrValidation. Anything
+// else describes the application's internal state and does not belong in a
+// response at all.
+func Message(err error) string {
+	if err == nil {
+		return ""
+	}
+	if _, after, found := strings.Cut(err.Error(), ": "); found {
+		return after
+	}
+	return err.Error()
+}

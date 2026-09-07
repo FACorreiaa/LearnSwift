@@ -1,0 +1,145 @@
+package account
+
+import "github.com/FACorreiaa/seshat/web/shared/layout"
+
+// Token is one credential as the page needs it: already formatted, and with no
+// field that could hold the secret. The plaintext exists in exactly one place
+// on this page — View.Issued, on the one render that follows creating it.
+type Token struct {
+	ID       string
+	Label    string
+	Created  string
+	LastUsed string
+	Expires  string
+	Expired  bool
+}
+
+type View struct {
+	Tokens []Token
+
+	// Issued is a freshly created token, shown once and never recoverable.
+	// Empty on every other render.
+	Issued string
+
+	// MCPURL is this deployment's endpoint, so the snippet below is one a
+	// learner can copy rather than one they have to adapt.
+	MCPURL string
+
+	Error string
+}
+
+templ TokensPage(v View) {
+	@layout.Public(layout.Meta{
+		Title: "Access tokens — Seshat",
+		// No canonical and no description worth indexing: this page is
+		// different for every learner and belongs in no search result.
+		Description: "Manage the tokens that let your editor talk to Seshat.",
+	}) {
+		<div class="mx-auto max-w-3xl px-6 py-16">
+			<h1 class="text-2xl font-semibold tracking-tight">Access tokens</h1>
+			<p class="text-muted-foreground mt-2 text-sm">
+				A token lets an editor or an agent work through the lessons on your behalf and
+				record what it does against your account. Submissions that arrive this way are
+				marked as assisted.
+			</p>
+			if v.Issued != "" {
+				@issued(v)
+			}
+			@createForm(v.Error)
+			@tokenList(v.Tokens)
+		</div>
+	}
+}
+
+// issued is the one and only time the token is readable. Said plainly, because
+// a learner who closes this panel without copying the value has to make another
+// one, and finding that out later is worse than being told now.
+templ issued(v View) {
+	<div class="border-primary/40 bg-primary/5 mt-8 rounded-md border p-4">
+		<h2 class="text-sm font-semibold">Your new token</h2>
+		<p class="text-muted-foreground mt-1 text-sm">
+			Copy it now. It is stored hashed, so this is the only time it can be shown.
+		</p>
+		<pre class="bg-muted mt-3 overflow-x-auto rounded p-3 font-mono text-xs select-all">{ v.Issued }</pre>
+		<h3 class="mt-4 text-sm font-semibold">Point Claude Code at it</h3>
+		<pre class="bg-muted mt-2 overflow-x-auto rounded p-3 font-mono text-xs select-all">{ claudeCodeCommand(v) }</pre>
+	</div>
+}
+
+templ createForm(errMessage string) {
+	<form
+		method="post"
+		action="/account/tokens"
+		class="border-border mt-8 rounded-md border p-4"
+	>
+		@layout.CSRFInput()
+		<label for="label" class="text-sm font-medium">Name this token</label>
+		<p class="text-muted-foreground mt-1 text-xs">
+			Something you will recognise later, so you know which one to revoke.
+		</p>
+		<div class="mt-3 flex flex-wrap gap-3">
+			<input
+				id="label"
+				name="label"
+				type="text"
+				required
+				maxlength="60"
+				placeholder="laptop, Claude Code"
+				autocomplete="off"
+				class="bg-muted focus-visible:ring-ring min-w-56 flex-1 rounded-md px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+			/>
+			<button
+				type="submit"
+				class="bg-primary text-primary-foreground hover:bg-primary/90 h-10 rounded-md px-4 text-sm font-medium"
+			>
+				Create token
+			</button>
+		</div>
+		if errMessage != "" {
+			<p role="alert" class="text-destructive mt-3 text-sm">{ errMessage }</p>
+		}
+	</form>
+}
+
+templ tokenList(tokens []Token) {
+	<h2 class="mt-10 text-sm font-semibold">Your tokens</h2>
+	if len(tokens) == 0 {
+		<p class="text-muted-foreground mt-2 text-sm">You have not created any yet.</p>
+	} else {
+		<ul class="divide-border mt-2 divide-y">
+			for _, t := range tokens {
+				<li class="flex flex-wrap items-center gap-3 py-3">
+					<div class="min-w-0 flex-1">
+						<p class="truncate text-sm font-medium">
+							{ t.Label }
+							if t.Expired {
+								<span class="text-muted-foreground ml-2 text-xs font-normal">expired</span>
+							}
+						</p>
+						<p class="text-muted-foreground text-xs">
+							Created { t.Created } · last used { t.LastUsed } · expires { t.Expires }
+						</p>
+					</div>
+					// A POST, never a link: a GET that revokes a credential can
+					// be fired by any image tag on any page on the internet.
+					<form method="post" action={ "/account/tokens/" + t.ID + "/revoke" }>
+						@layout.CSRFInput()
+						<button
+							type="submit"
+							class="border-border hover:bg-muted h-9 rounded-md border px-3 text-sm font-medium"
+						>
+							Revoke
+						</button>
+					</form>
+				</li>
+			}
+		</ul>
+	}
+}
+
+// claudeCodeCommand is the whole of the setup, which is the point: if this were
+// three steps it would be a page of documentation instead of a line to paste.
+func claudeCodeCommand(v View) string {
+	return "claude mcp add --transport http seshat " + v.MCPURL +
+		" --header \"Authorization: Bearer " + v.Issued + "\""
+}

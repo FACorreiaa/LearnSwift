@@ -15,6 +15,8 @@ function setupEditor(textarea) {
   if (textarea.dataset.editorReady) return;
   textarea.dataset.editorReady = 'true';
 
+  reportProvenance(textarea);
+
   // Tab inside a textarea is a genuine accessibility problem: a keyboard user
   // who lands here must still be able to leave. Escape releases the trap for
   // the next keypress, which is the convention screen-reader users expect, and
@@ -52,6 +54,50 @@ function setupEditor(textarea) {
       newlineKeepingIndent(textarea);
     }
   });
+}
+
+// Reports how this submission came to exist, so that "solved forty lessons" and
+// "solved forty lessons unaided" can be different numbers.
+//
+// What is sent is a single word. The paste sizes it is derived from stay in the
+// browser: they describe how somebody works, which is nobody else's business,
+// and the label is the only part with a use.
+//
+// The starter code is excluded, because it was pasted into the box by this
+// application. Measuring against it would label a learner who types one correct
+// line into a twenty-line skeleton as having pasted their answer.
+//
+// Where the accounting is ambiguous it errs toward 'pasted'. Overstating what
+// somebody did unaided is the one mistake worth designing against; understating
+// it costs them a place on a leaderboard they opted into.
+function reportProvenance(textarea) {
+  const starterLength = textarea.value.length;
+  let largestPaste = 0;
+
+  textarea.addEventListener('paste', (event) => {
+    const pasted = event.clipboardData?.getData('text') ?? '';
+    largestPaste = Math.max(largestPaste, pasted.length);
+  });
+
+  // htmx assembles the request from the form, so the label is added there
+  // rather than kept in a hidden input: a field that only JavaScript maintains
+  // is a field that lies whenever JavaScript did not run. With no listener the
+  // parameter is simply absent, and the server records 'unknown'.
+  textarea.form?.addEventListener('htmx:config:request', (event) => {
+    event.detail.parameters.provenance = provenanceLabel(textarea.value.length, starterLength, largestPaste);
+  });
+}
+
+function provenanceLabel(finalLength, starterLength, largestPaste) {
+  // What the learner contributed, never zero: a submission identical to the
+  // starter has nothing pasted into it, and dividing by zero would call that
+  // an infinite fraction.
+  const authored = Math.max(1, finalLength - starterLength);
+  const fraction = largestPaste / authored;
+
+  if (fraction >= 0.8) return 'pasted';
+  if (fraction > 0.2) return 'mixed';
+  return 'typed';
 }
 
 // replaceSelection edits through the undo stack rather than by assigning to

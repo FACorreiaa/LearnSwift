@@ -18,6 +18,9 @@ Snapshot: 2026-08-29. IDs are stable; do not renumber when items close.
 | 5 | SG-05 | ~~Hints + solution reveal~~ | ✅ done | M | — |
 | 6 | SG-06 | ~~Signed-in home / continue button~~ | ✅ done | S | — |
 | — | — | **▸ SHIP GATE — you are here. Stop, get 10 strangers, read data** | — | — | — |
+| — | SG-25 | ~~MCP endpoint~~ | ✅ done | L | see note below |
+| — | SG-51 | ~~Submission provenance~~ | ✅ done | S | with SG-25 |
+| — | SG-37 | ~~Dual-track leaderboard~~ | ✅ done | M | with SG-25 |
 | 7 | SG-07 | Transactional email + password reset | 🔴 blocker | M | 2nd wave |
 | 8 | SG-08 | Legal pages, account deletion, data export | 🔴 blocker | M | EU compliance |
 | 9 | SG-09 | Account settings page | 🟡 med | S | — |
@@ -28,6 +31,22 @@ Snapshot: 2026-08-29. IDs are stable; do not renumber when items close.
 | 14 | SG-14 | Accessibility pass | 🟡 med | M | debt growth |
 
 Parked until ≥10 strangers: SG-20…SG-26 at the bottom.
+
+**SG-25, SG-51 and SG-37 were built ahead of this gate, on 2026-09-07, by a
+deliberate decision rather than by drift.** The strangers count was still 0. The
+argument for it was that the MCP endpoint aims at a different audience — the
+Swift 6 migration developers in `docs/marketing-plan.md`, who have Macs and run
+agents — and that provenance had to land with it or the endpoint would quietly
+make the progress numbers untrue. The argument against it is the one in
+`docs/marketing-plan.md` §9, and it is a good one: two surfaces before anybody
+has used one is how a solo project spreads itself thin. Recorded here so the
+decision is legible later, whichever way it turns out.
+
+Notably, this route needed none of the AI blockers in `docs/gamification.md`:
+the learner brings their own agent, so there is no LLM client, no token spend,
+no prompt-injection surface, and neither SG-40 nor the SG-49 eval harness
+applies. SG-29 is likewise not a prerequisite — MCP callers are always
+authenticated.
 
 Effort: S ≈ half a day · M ≈ 1–3 days · L ≈ weeks.
 
@@ -392,11 +411,13 @@ Listed so they stop occupying attention, not so they get built.
 | SG-22 | OAuth (GitHub / Apple) | Reduces signup friction — but guest mode already removed the wall that mattered. |
 | SG-23 | Lesson search | Matters at 45+ lessons (SG-11), not 21. |
 | SG-24 | i18n | Not now. |
-| SG-25 | MCP endpoint / public compile API | Already anticipated in `cmd/web/main.go:204-206`. A genuine differentiator later; a distraction now. |
+| SG-25 | ~~MCP endpoint~~ / public compile API | **MCP endpoint shipped 2026-09-07** — `internal/mcp`, four tools over stateless streamable HTTP, bearer-authenticated with the access tokens in `internal/auth/token.go`. See `docs/mcp.md`. The *public compile API* half remains parked: it is a second product with its own abuse surface. |
 | SG-26 | Mobile client | Explicitly out of scope. Fix responsive web instead — it serves the same need at 5% of the cost. |
 | SG-29 | Persist guest attempts | Designed in `docs/gamification.md`. Not parked in spirit: guest failures currently leave no row (`exercise_attempt.user_id` is NOT NULL), so "read every failed submission" is impossible for the anonymous strangers the gate is about. Schema-only, no UI. Candidate to do at the gate. |
-| SG-30…SG-39 | Duolingo-style mechanics — streaks, XP, spaced repetition, exercise kinds, path map, achievements, placement, leagues, reminders, mascot | Designed in `docs/gamification.md` with per-item unlock triggers. Retention mechanics with nobody to retain. |
-| SG-40…SG-51 | AI-assisted learning — provider-agnostic LLM layer, error explainer, adaptive hints, code review, tutor, practice variants, failure clustering, adaptive path, search, eval harness, in-editor assist, provenance | Designed in `docs/gamification.md`. The eval harness (SG-49) gates every learner-facing AI item; none ships without a golden set. |
+| SG-30…SG-36, SG-38, SG-39 | Duolingo-style mechanics — streaks, XP, spaced repetition, exercise kinds, path map, achievements, placement, reminders, mascot | Designed in `docs/gamification.md` with per-item unlock triggers. Retention mechanics with nobody to retain. |
+| SG-37 | ~~Leagues /~~ leaderboards | **Shipped 2026-09-07** as a dual-track board — `internal/leaderboard`, opt-in, Solo and Assisted counted separately. Built early because provenance made the distinction possible and an MCP endpoint without it would have made "solved 40 lessons" meaningless. Leagues and tiers remain parked. |
+| SG-40…SG-50 | AI-assisted learning — provider-agnostic LLM layer, error explainer, adaptive hints, code review, tutor, practice variants, failure clustering, adaptive path, search, eval harness, in-editor assist | Designed in `docs/gamification.md`. The eval harness (SG-49) gates every learner-facing AI item; none ships without a golden set. Unaffected by SG-25: an endpoint the learner points their own agent at spends no tokens and writes no prompts. |
+| SG-51 | ~~Submission provenance~~ | **Shipped 2026-09-07**, and stronger than designed. The spec had a browser-side paste heuristic only; the MCP channel makes `agent` a fact rather than an inference. Migration `20260907120000_submission_provenance.sql`. Still labels and never refuses. |
 
 ---
 

@@ -58,6 +58,13 @@ type Config struct {
 	PostHogAPIKey string
 	PostHogHost   string
 
+	// MCPEnabled controls whether the MCP endpoint is mounted. On by default:
+	// it is part of the product rather than an integration with something
+	// else, and there is no credential whose absence could disable it the way
+	// an empty PostHog key disables analytics. The flag exists so a deployment
+	// that does not want a non-browser surface can close it without a rebuild.
+	MCPEnabled bool
+
 	// AssetDir is where assets are read from in development. Production ignores
 	// it and serves the copies embedded in the binary.
 	//
@@ -118,6 +125,12 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	c.AutoMigrate = autoMigrate
+
+	mcpEnabled, err := envBool("MCP_ENABLED", true)
+	if err != nil {
+		return Config{}, err
+	}
+	c.MCPEnabled = mcpEnabled
 
 	if c.LogFormat == "" {
 		// Text is readable in a terminal; JSON is what a log collector can

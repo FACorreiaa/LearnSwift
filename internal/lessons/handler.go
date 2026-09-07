@@ -1,7 +1,6 @@
 package lessons
 
 import (
-	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -13,12 +12,12 @@ import (
 
 	"github.com/FACorreiaa/seshat/internal/auth"
 	"github.com/FACorreiaa/seshat/internal/executor"
+	"github.com/FACorreiaa/seshat/internal/grading"
 	"github.com/FACorreiaa/seshat/internal/lessons/lesson"
 	"github.com/FACorreiaa/seshat/internal/progress"
 	"github.com/FACorreiaa/seshat/internal/shared/analytics"
 	"github.com/FACorreiaa/seshat/internal/shared/middleware"
 	"github.com/FACorreiaa/seshat/internal/shared/ratelimit"
-	"github.com/FACorreiaa/seshat/internal/validate"
 	"github.com/FACorreiaa/seshat/web/landing"
 	lessonpages "github.com/FACorreiaa/seshat/web/lesson"
 )
@@ -43,10 +42,13 @@ const (
 )
 
 type Handler struct {
-	index     *Index
-	progress  *progress.Service
-	validator Validator
-	executor  Executor
+	index    *Index
+	progress *progress.Service
+
+	// grading settles submissions. The browser is one of two callers — an MCP
+	// client is the other — and the verdict must not depend on which asked.
+	grading *grading.Service
+
 	analytics analytics.Client
 
 	// secure marks the guest attempt-counting cookie. Mirrors the session
@@ -60,25 +62,15 @@ type Handler struct {
 	userChecks  *ratelimit.Limiter
 }
 
-// Executor compiles and runs a submission. Declared as an interface so the
-// handler's decision-making can be tested without a 4 GB compiler image.
-type Executor interface {
-	Available() bool
-	Run(ctx context.Context, source string, rt lesson.Runtime) (executor.Result, error)
-
-	// Cached reports whether this submission already has a compiled module, so
-	// the handler can decline to charge quota for a resubmission that costs
-	// nothing to serve.
-	Cached(source string, rt lesson.Runtime) bool
-}
-
-// Validator is the subset of internal/validate this package needs. Declared
-// here rather than imported as a concrete type so a test can substitute one
-// without a Swift toolchain.
-type Validator interface {
-	Available() bool
-	Validate(ctx context.Context, source string, a lesson.Assertions) (validate.Result, error)
-}
+// Executor and Validator are the grader's dependencies, re-exported so that
+// wiring this package up reads as one import rather than two. They are aliases
+// rather than fresh declarations because there must be exactly one definition
+// of what grading needs: two structurally identical interfaces would drift the
+// first time either grew a method.
+type (
+	Executor  = grading.Executor
+	Validator = grading.Validator
+)
 
 func NewHandler(index *Index, prog *progress.Service, v Validator, e Executor, an analytics.Client, secure bool) *Handler {
 	if an == nil {
@@ -87,8 +79,7 @@ func NewHandler(index *Index, prog *progress.Service, v Validator, e Executor, a
 	return &Handler{
 		index:       index,
 		progress:    prog,
-		validator:   v,
-		executor:    e,
+		grading:     grading.New(v, e, prog, an),
 		analytics:   an,
 		secure:      secure,
 		guestChecks: ratelimit.New(guestCheckLimit, checkLimitWindow),
@@ -376,93 +367,88 @@ func (h *Handler) check(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.capture(r, analytics.EventCheckSubmitted, l)
+	sub := h.submission(r, l, code)
+	log := middleware.FromContext(r.Context())
 
-	view := lessonpages.View{Lesson: l}
-	view.Next, view.HasNext = h.index.Next(slug)
-	result := lessonpages.Result{Submitted: true, Code: code}
-
-	got, err := h.validator.Validate(r.Context(), code, l.Assertions)
+	got, err := h.grading.Grade(r.Context(), sub, log)
 	if err != nil {
-		// A grader that cannot run is an operational fault, not a wrong answer.
-		// Reporting it as a failure would tell a learner their correct code is
-		// wrong, which is the one outcome worth going out of the way to avoid.
-		middleware.FromContext(r.Context()).Error("could not validate submission", slog.Any("error", err))
-		result.Unavailable = true
-		view.Result = result
-		render(w, r, http.StatusServiceUnavailable, lessonpages.ResultPanel(result))
-		return
-	}
-
-	result.Failures = got.Failures
-	result.Diagnostics = got.Diagnostics
-
-	// Static checks first, and a failure there ends it: there is no point
-	// compiling code that already breaks the lesson's rules, and a compiler
-	// error would bury the simpler explanation.
-	if !got.OK {
-		h.respond(w, r, l, result)
-		return
-	}
-
-	// Everything static passed. If the lesson only asks static questions, that
-	// is the whole answer.
-	if !l.Assertions.NeedsExecution() {
-		result.Passed = true
-		h.respond(w, r, l, result)
-		return
-	}
-
-	// The rest can only be settled by running the code.
-	if !l.Runtime.Executable() || h.executor == nil || !h.executor.Available() {
-		// The lesson wants output but nothing can produce it. Reported as
-		// pending rather than as a pass, because a submission that has not
-		// been checked has not passed.
-		result.Pending = true
-		h.respond(w, r, l, result)
-		return
-	}
-
-	run, err := h.executor.Run(r.Context(), code, l.Runtime)
-	if err != nil {
-		// Every compile slot was busy for longer than this submission was worth
-		// waiting. Reported as busy rather than unavailable, because "try again
-		// in a moment" is true and "we cannot grade this" is not.
+		// Every compile slot was busy for longer than this submission was
+		// worth waiting. Reported as busy rather than unavailable, because
+		// "try again in a moment" is true and "we cannot grade this" is not.
 		if errors.Is(err, executor.ErrBusy) {
-			middleware.FromContext(r.Context()).Warn("compiler busy", slog.String("slug", l.Slug))
+			log.Warn("compiler busy", slog.String("slug", l.Slug))
 			w.Header().Set("Retry-After", "5")
 			render(w, r, http.StatusTooManyRequests, lessonpages.BusyPanel())
 			return
 		}
-		middleware.FromContext(r.Context()).Error("could not run submission", slog.Any("error", err))
-		result.Unavailable = true
-		view.Result = result
-		render(w, r, http.StatusServiceUnavailable, lessonpages.ResultPanel(result))
+
+		// A grader that cannot run is an operational fault, not a wrong
+		// answer. Reporting it as a failure would tell a learner their correct
+		// code is wrong, which is the one outcome worth going out of the way
+		// to avoid.
+		log.Error("could not grade submission", slog.Any("error", err))
+		render(w, r, http.StatusServiceUnavailable, lessonpages.ResultPanel(lessonpages.Result{
+			Submitted:   true,
+			Code:        code,
+			Unavailable: true,
+		}))
 		return
 	}
 
-	switch {
-	case !run.Compiled:
-		// swiftc's own diagnostics, passed through. They are better than
-		// anything that would survive being reformatted.
-		result.CompilerOutput = run.Diagnostics
-		result.CompileFailed = true
+	h.respond(w, r, l, viewResult(code, got))
+}
 
-	case run.TimedOut:
-		result.TimedOut = true
-
-	default:
-		result.Stdout = run.Stdout
-		result.Stderr = run.Stderr
-		result.ExitCode = run.ExitCode
-		result.Failures = append(result.Failures, validate.CheckOutput(run.Stdout, l.Assertions)...)
-		// A program that trapped has not satisfied its lesson, whatever it
-		// managed to print before dying.
-		result.Passed = len(result.Failures) == 0 && run.ExitCode == 0
+// submission describes this request to the grader. The analytics identity is
+// resolved here because deriving one for an anonymous visitor needs an address
+// and a user agent, which are this layer's business and not the grader's.
+func (h *Handler) submission(r *http.Request, l lesson.Lesson, code string) grading.Submission {
+	sub := grading.Submission{
+		Lesson:  l,
+		Code:    code,
+		Channel: grading.ChannelWeb,
+		// Derived in the editor from paste size. Absent whenever JavaScript
+		// did not run, which is an honest 'unknown' rather than a problem.
+		Provenance: grading.ProvenanceFromClient(r.PostFormValue("provenance")),
 	}
 
-	view.Result = result
-	h.respond(w, r, l, result)
+	var userID string
+	if user, ok := auth.UserFrom(r.Context()); ok {
+		sub.UserID = user.ID
+		userID = user.ID.String()
+	}
+	sub.DistinctID = analytics.DistinctID(userID, middleware.ClientIP(r), r.UserAgent())
+
+	return sub
+}
+
+// viewResult translates a verdict into the shape the result panel renders.
+//
+// The grader names one outcome; the panel carries a flag per outcome. Keeping
+// the translation in one function is what stops a new outcome from silently
+// rendering as an ordinary wrong answer.
+func viewResult(code string, got grading.Result) lessonpages.Result {
+	result := lessonpages.Result{
+		Submitted:      true,
+		Code:           code,
+		Passed:         got.Passed(),
+		Failures:       got.Failures,
+		Diagnostics:    got.Diagnostics,
+		CompilerOutput: got.CompilerOutput,
+		Stdout:         got.Stdout,
+		Stderr:         got.Stderr,
+		ExitCode:       got.ExitCode,
+	}
+
+	switch got.Outcome {
+	case grading.OutcomeCompileFailed:
+		result.CompileFailed = true
+	case grading.OutcomeTimedOut:
+		result.TimedOut = true
+	case grading.OutcomePending:
+		result.Pending = true
+	}
+
+	return result
 }
 
 // allowCheck meters the endpoint, reporting whether the submission may proceed
@@ -474,7 +460,7 @@ func (h *Handler) check(w http.ResponseWriter, r *http.Request) {
 // action that costs nothing, and would punish the learner who resubmits an
 // unchanged answer to re-read the output.
 func (h *Handler) allowCheck(w http.ResponseWriter, r *http.Request, l lesson.Lesson, code string) bool {
-	if h.executor != nil && h.executor.Cached(code, l.Runtime) {
+	if h.grading.Cached(code, l.Runtime) {
 		return true
 	}
 
@@ -532,25 +518,12 @@ func (h *Handler) capture(r *http.Request, name string, l lesson.Lesson) {
 }
 
 // respond renders the result panel with the status its outcome deserves.
+//
+// Recording the attempt is the grader's job, and has already happened by the
+// time this is called. What is left is the part only a browser has: the guest
+// failure cookie, and the help it earns.
 func (h *Handler) respond(w http.ResponseWriter, r *http.Request, l lesson.Lesson, result lessonpages.Result) {
-	if result.Passed {
-		h.capture(r, analytics.EventCheckPassed, l)
-	}
-
-	signedIn := false
-	if user, ok := auth.UserFrom(r.Context()); ok {
-		signedIn = true
-		if _, err := h.progress.RecordAttempt(r.Context(), user.ID, l.Slug, result.Code, result.Passed); err != nil {
-			middleware.FromContext(r.Context()).Error("could not record attempt", slog.Any("error", err))
-		}
-		if result.Passed {
-			if err := h.progress.Complete(r.Context(), user.ID, l.Slug); err != nil {
-				middleware.FromContext(r.Context()).Error("could not complete lesson", slog.Any("error", err))
-			} else {
-				h.capture(r, analytics.EventLessonCompleted, l)
-			}
-		}
-	}
+	signedIn := isSignedIn(r)
 
 	// A pending result decided nothing, so it is not a failure. Counting it
 	// would offer the answer to someone whose code was never actually judged.

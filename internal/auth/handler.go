@@ -38,6 +38,15 @@ type Handler struct {
 	mw        *Middleware
 	analytics analytics.Client
 
+	// tokens serves the access-token pages. Nil in a build with no database,
+	// which is what leaves those routes unregistered.
+	tokens *TokenStore
+
+	// baseURL is this deployment's own address, needed so the setup snippet on
+	// the token page names an endpoint a learner can paste rather than one
+	// they have to work out.
+	baseURL string
+
 	logins    *ratelimit.Limiter
 	registers *ratelimit.Limiter
 
@@ -46,7 +55,7 @@ type Handler struct {
 	authOverride authFunc
 }
 
-func NewHandler(svc *Service, mw *Middleware, an analytics.Client) *Handler {
+func NewHandler(svc *Service, mw *Middleware, an analytics.Client, tokens *TokenStore, baseURL string) *Handler {
 	if an == nil {
 		an = analytics.Nop()
 	}
@@ -54,6 +63,8 @@ func NewHandler(svc *Service, mw *Middleware, an analytics.Client) *Handler {
 		svc:       svc,
 		mw:        mw,
 		analytics: an,
+		tokens:    tokens,
+		baseURL:   baseURL,
 		logins:    ratelimit.New(loginAttemptLimit, loginAttemptWindow),
 		registers: ratelimit.New(registerAttemptLimit, registerAttemptWindow),
 	}
@@ -67,6 +78,7 @@ func (h *Handler) Routes(r chi.Router) {
 	// A POST, never a link. A GET that signs the visitor out can be triggered
 	// by any image tag on any page on the internet.
 	r.Post("/logout", h.logout)
+	h.tokenRoutes(r)
 }
 
 func (h *Handler) showLogin(w http.ResponseWriter, r *http.Request) {
