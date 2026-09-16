@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -218,6 +219,10 @@ func routes(cfg config.Config, pool *pgxpool.Pool, index *lessons.Index, svc *se
 	// a CSRF token, and it should keep answering while the rest is broken.
 	r.Get("/healthz", healthz(pool))
 
+	// Internal operator endpoint: total user count for the portfolio dashboard.
+	// Guarded by METRICS_SECRET; outside every auth/CSRF group.
+	r.Get("/internal/metrics", metricsHandler(pool))
+
 	// nil pool is the routing tests, which exercise the static routes without
 	// standing up a database. Building the slices against a nil pool would
 	// panic on the first query rather than at construction.
@@ -423,6 +428,31 @@ func healthz(pool *pgxpool.Pool) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		_ = json.NewEncoder(w).Encode(body)
+	}
+}
+
+// metricsHandler returns the total user count for the portfolio dashboard at
+// facorreia.com/apps. It is guarded by METRICS_SECRET; callers must present
+// the secret as a Bearer token.
+func metricsHandler(pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		secret := os.Getenv("METRICS_SECRET")
+		if secret == "" {
+			http.Error(w, "metrics endpoint not configured", http.StatusInternalServerError)
+			return
+		}
+		presented, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if !found || subtle.ConstantTimeCompare([]byte(presented), []byte(secret)) != 1 {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		var count int64
+		if err := pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM users").Scan(&count); err != nil {
+			http.Error(w, "query failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"users":%d}`, count) //nolint:errcheck
 	}
 }
 
