@@ -1,0 +1,9 @@
+--indent 4
+--maxwidth 120
+--wraparguments before-first
+--wrapcollections before-first
+--self remove
+--importgrouping testable-bottom
+--stripunusedargs closure-only
+--disable redundantSelf
+--exclude .build,.swiftpm,DerivedData
