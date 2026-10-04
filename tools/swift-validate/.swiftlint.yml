@@ -1,0 +1,26 @@
+included:
+  - Sources
+
+excluded:
+  - .build
+  - DerivedData
+
+line_length:
+  warning: 120
+  ignores_urls: true
+  ignores_comments: true
+
+identifier_name:
+  excluded:
+    - id
+    - x
+    - y
+
+opt_in_rules:
+  - empty_count
+  - first_where
+  - force_unwrapping
+  - unused_import
+
+disabled_rules:
+  - trailing_whitespace
