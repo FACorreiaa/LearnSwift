@@ -20,11 +20,11 @@ struct Assertions: Decodable {
         case mustNotUse = "must_not_use"
     }
 
-    // Written out rather than synthesized. Swift's generated decoder requires
-    // every key whose property is not Optional — a default value does not make
-    // one optional — so a lesson declaring only `must_not_use` would be
-    // rejected as a malformed request rather than validated. An absent key
-    // means "no assertions of this kind", which is the only sane reading.
+    /// Written out rather than synthesized. Swift's generated decoder requires
+    /// every key whose property is not Optional — a default value does not make
+    /// one optional — so a lesson declaring only `must_not_use` would be
+    /// rejected as a malformed request rather than validated. An absent key
+    /// means "no assertions of this kind", which is the only sane reading.
     init() {}
 
     init(from decoder: Decoder) throws {
@@ -103,14 +103,16 @@ func codeOnly(_ source: String) -> String {
     for token in tree.tokens(viewMode: .sourceAccurate) {
         // The contents of a string literal are not code. The quotes around it
         // are kept, so `let s = ""` still reads as an assignment.
-        if case .stringSegment = token.tokenKind { continue }
+        if case .stringSegment = token.tokenKind {
+            continue
+        }
 
         let start = token.positionAfterSkippingLeadingTrivia.utf8Offset
         let bytes = Array(token.text.utf8)
         guard start >= 0, start + bytes.count <= result.count else { continue }
 
-        for (i, byte) in bytes.enumerated() {
-            result[start + i] = byte
+        for (offset, byte) in bytes.enumerated() {
+            result[start + offset] = byte
         }
     }
 
@@ -179,7 +181,7 @@ func main() {
     do {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        FileHandle.standardOutput.write(try encoder.encode(response))
+        try FileHandle.standardOutput.write(encoder.encode(response))
     } catch {
         FileHandle.standardError.write(Data("swift-validate: cannot encode response: \(error)\n".utf8))
         exit(2)
