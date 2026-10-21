@@ -1,12 +1,12 @@
 // swift-tools-version:6.0
 import PackageDescription
 
-// swift-validate answers questions about a learner's Swift source: does it use
-// this construct, does it avoid that one, and does it parse at all.
-//
-// It is a separate executable rather than Go code because Swift is the only
-// language with a correct Swift parser. The Go side shells out to it; see
-// internal/validate for the client and the reasoning.
+/// swift-validate answers questions about a learner's Swift source: does it use
+/// this construct, does it avoid that one, and does it parse at all.
+///
+/// It is a separate executable rather than Go code because Swift is the only
+/// language with a correct Swift parser. The Go side shells out to it; see
+/// internal/validate for the client and the reasoning.
 let package = Package(
     name: "swift-validate",
     platforms: [.macOS(.v13)],
