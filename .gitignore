@@ -20,3 +20,24 @@ tools/swift-validate/.build/
 # Per-machine Claude Code settings. Ignored here rather than only in a
 # personal ~/.config/git/ignore, so a fresh clone does not commit one.
 .claude/settings.local.json
+
+# --- Build output: never commit a binary. ---
+# CI enforces this by file content (.github/workflows/no-binaries.yml); these
+# entries keep the usual outputs from ever being staged.
+bin/
+tmp/
+.build/
+*.exe
+*.test
+*.o
+*.a
+*.so
+*.dylib
+/air
+/golangci-lint
+/main
+/server
+/seshat
+/sqlc
+/tailwindcss
+/templ
