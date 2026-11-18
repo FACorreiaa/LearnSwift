@@ -41,7 +41,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/web
 
 # Runtime stage:
 # This image stays small and only contains the final app binary.
-FROM alpine:3.20.2
+FROM alpine:3.24.4
 WORKDIR /app
 
 # Install runtime certificates.
