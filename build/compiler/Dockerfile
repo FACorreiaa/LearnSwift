@@ -5,7 +5,7 @@
 # the web binary's runtime image. It is also the only place untrusted input
 # meets a compiler, so it is the thing to keep small in privilege even though it
 # is large on disk.
-FROM swift:6.3.1
+FROM swift:6.4.2
 
 # Both SDKs, installed once at build time. Installing per compile would mean a
 # 72 MB download and an unpack on every submission, which is most of the latency
